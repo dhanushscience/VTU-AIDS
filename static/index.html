@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>VTU AIDS</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.png" />
+    <link rel="icon" href="/favicon.ico" />
+    <link rel="stylesheet" href="/static/styles.css?v=1.0.3" />
+  </head>
+  <body>
+    <div
+      id="js-load-error"
+      hidden
+      style="
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        background: rgba(244, 244, 245, 0.96);
+        font-family: 'Segoe UI', system-ui, sans-serif;
+      "
+    >
+      <div
+        style="
+          max-width: 520px;
+          padding: 20px 22px;
+          border: 1px solid #fecaca;
+          border-radius: 12px;
+          background: #fff;
+          color: #18181b;
+          line-height: 1.5;
+        "
+      >
+        <strong>VTU AIDS could not load its UI scripts.</strong>
+        <p style="margin: 10px 0 0">
+          Close this window, then reopen the app. If it still fails, press
+          <strong>Ctrl + Shift + R</strong> in your browser or reinstall from the latest
+          <strong>VTU_AIDS_Setup.exe</strong>.
+        </p>
+      </div>
+    </div>
+    <div class="app">
+      <header class="topbar">
+        <div class="brand">
+          <div class="brand-icon" aria-hidden="true">
+            <img
+              class="brand-logo"
+              src="/static/logo.png"
+              width="40"
+              height="40"
+              alt=""
+              onerror="this.hidden=true;this.nextElementSibling.hidden=false"
+            />
+            <span class="brand-mark-fallback" hidden></span>
+          </div>
+          <div class="brand-text">
+            <h1>VTU AIDS</h1>
+            <p class="brand-sub">Automated Internship Diary System</p>
+          </div>
+        </div>
+        <div class="header-actions" style="display: flex; gap: 8px;">
+          <button type="button" class="btn btn-ghost" id="btn-settings" aria-label="Settings">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+            </svg>
+            Settings
+          </button>
+          <button type="button" class="btn btn-danger btn-sm" id="btn-quit" aria-label="Quit App" style="display: flex; align-items: center; gap: 6px;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+              <polyline points="16 17 21 12 16 7"></polyline>
+              <line x1="21" y1="12" x2="9" y2="12"></line>
+            </svg>
+            Quit
+          </button>
+        </div>
+      </header>
+
+      <main class="content">
+        <div class="workspace workspace-3">
+          <!-- Section 1: Date selection -->
+          <section class="section section-dates" aria-labelledby="sec-dates-title">
+            <article class="card card-fill">
+              <div class="card-head">
+                <div class="step-mark" aria-hidden="true">
+                  <span class="step-label">Step</span>
+                  <span class="step-index">01</span>
+                </div>
+                <div class="card-titles">
+                  <h2 id="sec-dates-title">Date selection</h2>
+                  <p class="card-desc">Calendar or range</p>
+                </div>
+                <span class="badge" id="date-count">0 dates</span>
+              </div>
+
+              <div class="segmented" role="tablist">
+                <button type="button" class="segmented-item active" data-mode="calendar" role="tab">Click days</button>
+                <button type="button" class="segmented-item" data-mode="range" role="tab">Date range</button>
+              </div>
+
+              <div id="cal-mode-wrap" class="cal-mode-toggle hidden">
+                <span class="cal-mode-label is-active" id="cal-mode-label-pick">Select for AI</span>
+                <label class="mode-switch" for="cal-mode-switch">
+                  <input
+                    type="checkbox"
+                    id="cal-mode-switch"
+                    role="switch"
+                    aria-labelledby="cal-mode-label-pick cal-mode-label-edit"
+                  />
+                  <span class="mode-switch-track" aria-hidden="true"></span>
+                </label>
+                <span class="cal-mode-label" id="cal-mode-label-edit">Edit</span>
+              </div>
+
+              <div id="panel-range" class="panel panel-range hidden">
+                <div class="field-row">
+                  <div class="field">
+                    <label for="range-from">From</label>
+                    <input type="date" id="range-from" />
+                  </div>
+                  <div class="field">
+                    <label for="range-till">Till</label>
+                    <input type="date" id="range-till" />
+                  </div>
+                </div>
+                <p class="field-hint">Checked weekdays are skipped</p>
+                <div class="weekday-pills">
+                  <label class="pill-toggle"><input type="checkbox" class="skip-wd" value="sun" checked /><span>Sun</span></label>
+                  <label class="pill-toggle"><input type="checkbox" class="skip-wd" value="mon" /><span>Mon</span></label>
+                  <label class="pill-toggle"><input type="checkbox" class="skip-wd" value="tue" /><span>Tue</span></label>
+                  <label class="pill-toggle"><input type="checkbox" class="skip-wd" value="wed" /><span>Wed</span></label>
+                  <label class="pill-toggle"><input type="checkbox" class="skip-wd" value="thu" /><span>Thu</span></label>
+                  <label class="pill-toggle"><input type="checkbox" class="skip-wd" value="fri" /><span>Fri</span></label>
+                  <label class="pill-toggle"><input type="checkbox" class="skip-wd" value="sat" checked /><span>Sat</span></label>
+                </div>
+                <button type="button" class="btn btn-secondary btn-sm" id="btn-resolve-range">Apply range</button>
+              </div>
+
+              <div id="panel-calendar" class="panel panel-calendar">
+                <div class="cal-nav">
+                  <button type="button" class="btn btn-icon" id="cal-prev" aria-label="Previous month">‹</button>
+                  <span class="cal-title" id="cal-month-label"></span>
+                  <button type="button" class="btn btn-icon" id="cal-next" aria-label="Next month">›</button>
+                </div>
+                <div class="calendar-grid" id="calendar-grid"></div>
+              </div>
+
+              <div class="chips-wrap">
+                <div class="date-chips" id="date-chips"></div>
+              </div>
+
+              <p class="field-hint cal-hint" id="cal-hint">
+                Future dates disabled. Select past days, then Generate with AI in Step 2.
+              </p>
+            </article>
+          </section>
+
+          <!-- Section 2: User entry -->
+          <section class="section section-entry" aria-labelledby="sec-entry-title">
+            <article class="card card-fill">
+              <div class="card-head">
+                <div class="step-mark" aria-hidden="true">
+                  <span class="step-label">Step</span>
+                  <span class="step-index">02</span>
+                </div>
+                <div class="card-titles">
+                  <h2 id="sec-entry-title">Your entry</h2>
+                  <p class="card-desc">Details for AI to expand per day</p>
+                </div>
+              </div>
+
+              <div class="entry-body">
+              <div class="field field-compact">
+                <label for="internship">Internship label</label>
+                <input type="text" id="internship" placeholder="Exact text from portal dropdown" />
+              </div>
+              <div class="field field-compact">
+                <label for="work-description">What you did (overall)</label>
+                <textarea
+                  id="work-description"
+                  rows="2"
+                  placeholder="Tasks, tools, projects, and learnings during this period…"
+                ></textarea>
+              </div>
+
+              <div class="field field-compact doc-upload-field">
+                <span class="label-block">Reference documents <span class="label-muted">(optional)</span></span>
+                <div class="doc-upload-row">
+                  <input
+                    type="file"
+                    id="doc-file-input"
+                    class="doc-file-input"
+                    accept=".pdf,.pptx,.doc,.docx,.md,.txt,.png,.jpg,.jpeg,.gif,.webp,.bmp,.py,.js,.ts,.tsx,.jsx,.java,.c,.cpp,.h,.cs,.go,.rs,.rb,.php,.swift,.kt,.sql,.html,.css,.json,.xml,.yaml,.yml,.sh,.ps1,.ipynb,image/*,text/*"
+                    multiple
+                  />
+                  <button type="button" class="btn btn-secondary btn-sm" id="btn-upload-doc" title="PDF, PPTX, Word, images, code, MD, or TXT — max 10 MB">
+                    Upload document
+                  </button>
+                </div>
+                <ul id="doc-list" class="doc-list" aria-live="polite"></ul>
+              </div>
+
+              <div class="entry-inline-row">
+                <div class="field field-compact field-inline">
+                  <label for="description-words">Words / day</label>
+                  <input type="number" id="description-words" min="20" max="500" step="10" value="80" />
+                </div>
+                <div class="field field-compact">
+                  <span class="label-block">Work hours</span>
+                  <div class="segmented segmented-compact" id="hours-mode-tabs" role="tablist">
+                    <button type="button" class="segmented-item active" data-hours-mode="constant" role="tab">
+                      Fixed
+                    </button>
+                    <button type="button" class="segmented-item" data-hours-mode="range" role="tab">
+                      Range
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div id="hours-panel-constant" class="hours-panel">
+                <div class="field field-compact">
+                  <label for="hours-constant">Hours (same every day)</label>
+                  <input type="number" id="hours-constant" min="0" max="24" step="0.25" value="6" />
+                </div>
+              </div>
+              <div id="hours-panel-range" class="hours-panel hidden">
+                <div class="hours-range-row">
+                  <div class="field field-compact">
+                    <label for="hours-min">Min hours</label>
+                    <input type="number" id="hours-min" min="0" max="24" step="0.25" value="5" />
+                  </div>
+                  <div class="field field-compact">
+                    <label for="hours-max">Max hours</label>
+                    <input type="number" id="hours-max" min="0" max="24" step="0.25" value="8" />
+                  </div>
+                </div>
+              </div>
+              </div>
+
+              <div class="entry-foot">
+              <div class="options-row options-row-entry">
+                <label class="check-pill">
+                  <input type="checkbox" id="run-headed" checked />
+                  <span>Visible browser</span>
+                </label>
+                <label class="check-pill">
+                  <input type="checkbox" id="run-skip-errors" checked />
+                  <span>Continue on errors</span>
+                </label>
+              </div>
+
+              <button type="button" class="btn btn-primary btn-block" id="btn-generate">
+                <span class="btn-label">Generate with AI</span>
+              </button>
+              </div>
+            </article>
+          </section>
+
+          <!-- Section 3: AI generated table -->
+          <section class="section section-ai" aria-labelledby="sec-ai-title">
+            <article class="card card-fill">
+              <div class="card-head">
+                <div class="step-mark" aria-hidden="true">
+                  <span class="step-label">Step</span>
+                  <span class="step-index">03</span>
+                </div>
+                <div class="card-titles">
+                  <h2 id="sec-ai-title">AI generated entries</h2>
+                  <p class="card-desc" id="preview-count">No entries yet</p>
+                </div>
+              </div>
+
+              <div id="section3-select-hint" class="section3-select-hint">
+                Step 1: turn on <strong>Edit</strong> and click a day — green = saved entry, dashed = create new in Step 3.
+              </div>
+
+              <div id="entry-editor" class="entry-editor entry-editor-ai hidden">
+                <p class="editor-head">
+                  <span id="edit-date-label">Day entry</span>
+                  <span id="edit-new-badge" class="new-badge hidden">Create new</span>
+                  <span id="edit-modified-badge" class="modified-badge hidden">Modified</span>
+                </p>
+                <p id="edit-create-hint" class="edit-create-hint hidden">
+                  No entry saved for this date yet. Use <strong>Fill with AI</strong> or complete the fields and click <strong>Create entry</strong>.
+                </p>
+                <div class="field">
+                  <label for="edit-description">Description</label>
+                  <textarea id="edit-description" rows="2"></textarea>
+                </div>
+                <div class="field-row editor-row-compact">
+                  <div class="field">
+                    <label for="edit-hours">Hours</label>
+                    <input type="number" id="edit-hours" min="0" max="24" step="0.25" />
+                  </div>
+                  <div class="field">
+                    <label for="edit-skills">Skills</label>
+                    <input type="text" id="edit-skills" />
+                  </div>
+                </div>
+                <div class="field">
+                  <label for="edit-learnings">Learnings</label>
+                  <textarea id="edit-learnings" rows="2"></textarea>
+                </div>
+                <div class="editor-actions editor-actions-stack">
+                  <button type="button" class="btn btn-secondary btn-sm btn-block" id="btn-fill-ai">
+                    Fill with AI
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn-accent btn-sm btn-block hidden"
+                    id="btn-add-back-entry"
+                    title="Generate this day again with AI"
+                  >
+                    Add back with AI
+                  </button>
+                  <button type="button" class="btn btn-primary btn-sm btn-block" id="btn-save-entry">Save this day</button>
+                  <button type="button" class="btn btn-secondary btn-sm btn-block" id="btn-revert-entry">
+                    Revert to AI version
+                  </button>
+                  <button type="button" class="btn btn-danger btn-sm btn-block" id="btn-delete-entry">
+                    Delete saved entry
+                  </button>
+                </div>
+              </div>
+
+              <div id="preview-wrap" class="preview-wrap">
+                <div id="preview-empty" class="preview-empty">
+                  Complete steps 1–2, then <strong>Generate with AI</strong>. Click any past day (or a table row) to add or edit entries here.
+                </div>
+                <div class="preview-scroll">
+                  <table class="preview-table" id="preview-table"></table>
+                </div>
+              </div>
+
+              <div class="action-row action-row-ai">
+                <button type="button" class="btn btn-secondary" id="btn-download" disabled title="Generate with AI first">Download Excel</button>
+                <button type="button" class="btn btn-accent" id="btn-run" disabled title="Generate with AI first">Run automation</button>
+              </div>
+              <p class="field-hint action-hint">Step 3 unlocks after you generate entries in step 2.</p>
+
+              <div id="status" class="toast toast-compact" role="status"></div>
+            </article>
+          </section>
+        </div>
+      </main>
+
+      <footer class="app-footer">
+        <p class="app-footer-text">
+          Developed by <span class="app-footer-credit">Dhanush Science</span>
+          <span class="app-footer-heart" aria-hidden="true">🖤</span>
+        </p>
+      </footer>
+    </div>
+
+    <div class="drawer-overlay" id="settings-modal" aria-hidden="true">
+      <aside class="drawer" role="dialog" aria-labelledby="drawer-title">
+        <div class="drawer-head">
+          <h2 id="drawer-title">Settings</h2>
+          <button type="button" class="btn btn-icon" id="btn-close-settings" aria-label="Close">×</button>
+        </div>
+        <div class="drawer-body">
+          <fieldset class="fieldset">
+            <legend>Portal login</legend>
+            <div class="field">
+              <label for="cfg-username">Username / email / USN</label>
+              <input type="text" id="cfg-username" autocomplete="username" />
+            </div>
+            <div class="field">
+              <label for="cfg-password">Password</label>
+              <input type="password" id="cfg-password" autocomplete="current-password" />
+            </div>
+          </fieldset>
+          <fieldset class="fieldset">
+            <legend>Gemini AI</legend>
+            <div class="field">
+              <label for="cfg-gemini-key">API key</label>
+              <input type="password" id="cfg-gemini-key" placeholder="Starts with AIza" autocomplete="off" />
+              <p class="field-hint">
+                <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Get key from AI Studio</a>
+              </p>
+            </div>
+            <div class="field">
+              <label for="cfg-gemini-model">Model</label>
+              <select id="cfg-gemini-model">
+                <option value="gemini-2.5-flash">gemini-2.5-flash (recommended)</option>
+                <option value="gemini-2.0-flash-lite">gemini-2.0-flash-lite</option>
+                <option value="gemini-1.5-flash">gemini-1.5-flash</option>
+                <option value="gemini-1.5-flash-8b">gemini-1.5-flash-8b</option>
+                <option value="gemini-2.0-flash">gemini-2.0-flash</option>
+              </select>
+            </div>
+          </fieldset>
+          <fieldset class="fieldset">
+            <legend>Defaults</legend>
+            <div class="field">
+              <label for="cfg-default-internship">Internship name</label>
+              <input type="text" id="cfg-default-internship" />
+            </div>
+            <div class="field">
+              <label for="cfg-description-words">Default words per description</label>
+              <input type="number" id="cfg-description-words" min="20" max="500" step="10" value="80" />
+            </div>
+          </fieldset>
+        </div>
+        <div class="drawer-foot">
+          <button type="button" class="btn btn-primary btn-block" id="btn-save-settings">Save settings</button>
+        </div>
+      </aside>
+    </div>
+
+    <script>
+      window.addEventListener("error", function (e) {
+        if (e.filename && String(e.filename).indexOf("app.js") >= 0) {
+          var el = document.getElementById("js-load-error");
+          if (el) {
+            el.hidden = false;
+            el.style.display = "flex";
+          }
+        }
+      });
+    </script>
+    <script src="/static/app.js?v=1.0.3"></script>
+  </body>
+</html>

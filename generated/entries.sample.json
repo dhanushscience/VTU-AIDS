@@ -1,0 +1,14 @@
+{
+  "entries": [
+    {
+      "date": "2026-04-08",
+      "internship": "Intern - Example Company",
+      "description": "Worked on API integration and testing.",
+      "hoursWorked": 6,
+      "learningOutcomes": "Understood REST error handling.",
+      "skillsUsed": "Python, Git",
+      "referenceLinks": "",
+      "blockersRisks": ""
+    }
+  ]
+}

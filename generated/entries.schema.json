@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "VTUAIDSEntries",
+  "type": "object",
+  "required": ["entries"],
+  "properties": {
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "date",
+          "internship",
+          "description",
+          "hoursWorked",
+          "learningOutcomes",
+          "skillsUsed"
+        ],
+        "properties": {
+          "date": { "type": "string", "format": "date" },
+          "internship": { "type": "string" },
+          "description": { "type": "string" },
+          "hoursWorked": { "type": "number" },
+          "learningOutcomes": { "type": "string" },
+          "skillsUsed": { "type": "string" },
+          "referenceLinks": { "type": "string" },
+          "blockersRisks": { "type": "string" }
+        }
+      }
+    }
+  }
+}

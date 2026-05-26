@@ -1,0 +1,13 @@
+{
+  "username": "your_student_id@college.ac.in",
+  "password": "",
+  "gemini_api_key": "",
+  "gemini_model": "gemini-2.5-flash",
+  "default_internship": "Intern - Company (exact portal dropdown label)",
+  "default_hours": 6,
+  "default_description_words": 80,
+  "hours_mode": "constant",
+  "hours_constant": 6,
+  "hours_min": 5,
+  "hours_max": 8
+}

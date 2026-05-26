@@ -1,0 +1,49 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# Build output (keep build/*.spec and build/*.ps1 in git)
+dist/
+build/VTU_AIDS/
+build/Output/
+build/tools/
+static/app.ico
+
+# Secrets and local data
+.env
+.env.local
+*.pfx
+student_config.json
+.student_config.capture.bak
+generated/entries.json
+generated/entries.xlsx
+
+# Local installs / copies (never commit)
+*.exe
+!docs/**/*.exe
+
+# Logs
+*.log
+install.log
+install-pip.log
+run_acknowledgements.jsonl
+debug-*.log
+errors/
+
+# IDE / OS
+.cursor/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Playwright
+playwright-report/
+test-results/
+ms-playwright/

@@ -1,0 +1,112 @@
+VTU AIDS — VTU Internyet portal skills list (for AI prompts)
+
+Design & Creative
+- 3D PRINTING CONCEPTS, DESIGN AND PRINTING
+- Adobe Illustrator
+- Adobe Indesign
+- Adobe Photoshop
+- Canva
+- Figma
+- INTERIOR AND EXTERIOR DESIGN
+- Layout Design
+- PRODUCT DESIGN & 3D PRINTING
+- PRODUCT DESIGN & MANUFACTURING
+
+Programming & Development
+- C++
+- Java
+- JavaScript
+- Python
+- PHP
+- Ruby on Rails
+- Swift
+- Objective-C
+- Kotlin
+- Android Studio
+- Flutter
+- Angular
+- React
+- React.js
+- Node.js
+- HTML
+- CSS
+- Laravel
+- CodeIgniter
+- CakePHP
+- FilamentPHP
+- Game design
+- Game development
+- Game engine (Godot)
+
+Data Science & AI
+- Machine learning
+- Natural language processing
+- Computer vision
+- Intelligent Machines
+- Pandas
+- Numpy
+- Matplotlib
+- Seaborn
+- scikit-learn
+- Keras
+- PyTorch
+- Data modeling
+- Data visualization
+- Statistical analysis
+- Statistics
+
+Cloud & DevOps
+- AWS
+- Azure
+- Google Cloud
+- Docker
+- Kubernetes
+- DevOps
+- IaaS
+- PaaS
+- SaaS
+- Cloud access control
+- Data encryption
+- Firewall configuration
+
+Core Engineering & Networking
+- Embedded Systems
+- Circuit Design
+- Design with FPGA
+- IoT
+- BIM CONCEPTS WITH MEP AND PRODUCT DESIGN
+- BIM FOR ARCHITECTURE, CONSTRUCTION, HIGHWAY ENGINEERING, STRUCTURES
+- DHCP
+- LAN
+- Network architecture
+- Indexing
+
+Business & Management
+- Accounting
+- Finance
+- Business Management
+- Business operations and Strategy
+- entrepreneurship
+- Human Resource Management
+- Inventory Management
+- Marketing
+- Sales & Marketing
+- Operations Management
+- Planning & Control systems
+- Risk management
+- Economics
+- Macro economics
+- Micro economics
+- Market Theory
+- Management Information System
+- Power BI
+- Tableau
+
+Databases
+- MySQL
+- PostgreSQL
+- MongoDB
+- Cassandra
+- NoSQL
+- SQL
+- Database design
