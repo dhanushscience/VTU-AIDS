@@ -52,7 +52,7 @@
 
 **For most users — no Python needed.**
 
-1. Download **`VTU_AIDS_Setup.exe`** from [**Releases**](https://github.com/YOUR_USERNAME/vtu-aids/releases).
+1. Download **`VTU_AIDS_Setup.exe`** from [**Releases**]([https://github.com/YOUR_USERNAME/vtu-aids/releases](https://github.com/dhanushscience/VTU-AIDS/releases/tag/v1.0.3)).
 2. Run the installer and open **VTU AIDS** from the Start menu.
 3. Open **Settings** → save portal login + [Gemini API key](https://aistudio.google.com/apikey).
 4. **Step 1** — pick dates · **Step 2** — describe work → **Generate with AI** · **Step 3** — **Run automation**.
