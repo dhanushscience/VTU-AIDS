@@ -66,8 +66,8 @@
 **Requirements:** Windows 10/11, Python 3.11+, Gemini API key, VTU Internyet account.
 
 ```powershell
-git clone https://github.com/dhanushscience/vtu-aids.git
-cd vtu-aids
+git clone https://github.com/dhanushscience/VTU-AIDS.git
+cd VTU-AIDS
 python -m venv .venv
 .\.venv\Scripts\pip install -r requirements-desktop.txt
 .\.venv\Scripts\python -m playwright install chromium
