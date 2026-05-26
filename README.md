@@ -14,6 +14,16 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/dhanushscience/VTU-AIDS/releases/download/v1.0.3/VTU_AIDS_Setup.exe">
+    <img src="https://img.shields.io/badge/Download-VTU_AIDS_Setup.exe%20(v1.0.3)-2563eb?style=for-the-badge&logo=windows&logoColor=white" alt="Download VTU AIDS for Windows" />
+  </a>
+</p>
+
+<p align="center">
+  <sub>Windows 10/11 · ~277 MB · includes Chromium for automation</sub>
+</p>
+
+<p align="center">
   <a href="docs/INSTALL.md">Installation guide</a> ·
   <a href="docs/windows.md">Windows notes</a> ·
   <a href="SECURITY.md">Security</a> ·
@@ -52,7 +62,7 @@
 
 **For most users — no Python needed.**
 
-1. Download **`VTU_AIDS_Setup.exe`** from [**Releases**](https://github.com/YOUR_USERNAME/vtu-aids/releases).
+1. Download [**VTU_AIDS_Setup.exe**](https://github.com/dhanushscience/VTU-AIDS/releases/download/v1.0.3/VTU_AIDS_Setup.exe) (or see all [**Releases**](https://github.com/dhanushscience/VTU-AIDS/releases)).
 2. Run the installer and open **VTU AIDS** from the Start menu.
 3. Open **Settings** → save portal login + [Gemini API key](https://aistudio.google.com/apikey).
 4. **Step 1** — pick dates · **Step 2** — describe work → **Generate with AI** · **Step 3** — **Run automation**.
@@ -66,8 +76,8 @@
 **Requirements:** Windows 10/11, Python 3.11+, Gemini API key, VTU Internyet account.
 
 ```powershell
-git clone https://github.com/YOUR_USERNAME/vtu-aids.git
-cd vtu-aids
+git clone https://github.com/dhanushscience/VTU-AIDS.git
+cd VTU-AIDS
 python -m venv .venv
 .\.venv\Scripts\pip install -r requirements-desktop.txt
 .\.venv\Scripts\python -m playwright install chromium
