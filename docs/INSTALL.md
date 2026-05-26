@@ -23,7 +23,7 @@ Get **`VTU_AIDS_Setup.exe`** from the [Releases](https://github.com/YOUR_USERNAM
 
 ### 3. First launch — Settings
 
-![Settings drawer](03-settings.png)
+![Settings drawer](images/03-settings.png)
 
 1. Click **Settings** (top right).
 2. Enter your **VTU Internyet username** and **password**.
@@ -37,7 +37,7 @@ Settings are stored at:
 
 ### 4. Generate and upload entries
 
-![App overview](01-app-overview.png)
+![App overview](images/01-app-overview.png)
 
 | Step | What to do |
 |------|------------|
@@ -45,7 +45,7 @@ Settings are stored at:
 | **02 — Your entry** | Internship label, work summary, optional documents → **Generate with AI**. |
 | **03 — AI entries** | Review the table, edit if needed → **Run automation**. |
 
-![Date range mode](02-step1-date-range.png)
+![Date range mode](images/02-step1-date-range.png)
 
 **Tips**
 
