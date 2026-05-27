@@ -194,7 +194,7 @@ def _normalize_json_row(raw: dict[str, Any], row_no: int) -> dict[str, Any]:
 
 
 def read_json(path: Path) -> list[dict[str, Any]]:
-    with path.open(encoding="utf-8") as f:
+    with path.open(encoding="utf-8-sig") as f:
         data = json.load(f)
     if isinstance(data, dict) and "entries" in data:
         items = data["entries"]
@@ -1719,7 +1719,7 @@ def _remove_successful_entry_from_disk(entries_path: Path, date_str: str) -> Non
     if entries_path.suffix.lower() == ".json":
         try:
             import json
-            with entries_path.open("r", encoding="utf-8") as f:
+            with entries_path.open("r", encoding="utf-8-sig") as f:
                 data = json.load(f)
             if isinstance(data, dict) and "entries" in data:
                 # Find the successful entry
@@ -1746,7 +1746,7 @@ def _remove_successful_entry_from_disk(entries_path: Path, date_str: str) -> Non
                             used_script_mode_fallback = True
                             submitted_path = entries_path.parent / "submitted_entries.json"
                             if submitted_path.is_file():
-                                with submitted_path.open("r", encoding="utf-8") as sf:
+                                with submitted_path.open("r", encoding="utf-8-sig") as sf:
                                     raw_submitted = json.load(sf)
                                 if isinstance(raw_submitted, dict) and "entries" in raw_submitted:
                                     submitted = list(raw_submitted.get("entries") or [])
