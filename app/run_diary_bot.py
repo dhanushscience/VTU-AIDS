@@ -1,5 +1,5 @@
 """
-VTU AIDS — bulk upload internship diary entries to the VTU Internyet portal (JSON or Excel).
+VTU AIDS - bulk upload internship diary entries to the VTU Internyet portal (JSON or Excel).
 
 JSON (generated/entries.json): wrapper {"entries": [...]} or top-level array.
 Friendly keys: date, internship, description, hoursWorked, learningOutcomes, skillsUsed.
@@ -457,14 +457,14 @@ def _parse_date_from_text(text: str, *, target_iso: str | None = None) -> str | 
         return None
     cleaned = " ".join(text.strip().split())
 
-    # 1. ISO is unambiguous — try first.
+    # 1. ISO is unambiguous - try first.
     if re.match(r"^\d{4}-\d{2}-\d{2}$", cleaned[:10]):
         try:
             return datetime.datetime.strptime(cleaned[:10], "%Y-%m-%d").strftime("%Y-%m-%d")
         except ValueError:
             pass
 
-    # 2. Named-month formats are unambiguous — try before any numeric slash/dash format.
+    # 2. Named-month formats are unambiguous - try before any numeric slash/dash format.
     for fmt in (
         "%b %d, %Y",
         "%B %d, %Y",
@@ -479,7 +479,7 @@ def _parse_date_from_text(text: str, *, target_iso: str | None = None) -> str | 
         except ValueError:
             continue
 
-    # 3. Numeric slash/dash formats — ambiguous.  When a target is known,
+    # 3. Numeric slash/dash formats - ambiguous.  When a target is known,
     #    pick the interpretation that matches the target's month and day.
     numeric_fmts = (
         ("%d-%m-%Y", "%m-%d-%Y"),
@@ -508,7 +508,7 @@ def _parse_date_from_text(text: str, *, target_iso: str | None = None) -> str | 
                 if parsed_mdy and parsed_mdy.date() == target_dt.date():
                     return parsed_mdy.strftime("%Y-%m-%d")
 
-        # No target or neither interpretation matched — pick whichever succeeded.
+        # No target or neither interpretation matched - pick whichever succeeded.
         # Prefer MM/DD (the portal's React date-fns default) over DD/MM.
         if parsed_mdy:
             return parsed_mdy.strftime("%Y-%m-%d")
@@ -801,7 +801,7 @@ def _find_day_button(calendar: Locator, dt: datetime.datetime, iso_date: str) ->
     candidates = (
         # Prefer td[data-day] with ISO format (react-day-picker v9 uses YYYY-MM-DD here).
         calendar.locator(f"td[data-day='{iso_date}']:not([data-outside='true']) button.rdp-day_button"),
-        # data-day on the button itself — try both locale variants.
+        # data-day on the button itself - try both locale variants.
         calendar.locator(f"button.rdp-day_button[data-day='{data_day_mdy}']:not([disabled])"),
         calendar.locator(f"button.rdp-day_button[data-day='{data_day_dmy}']:not([disabled])"),
         # aria-label with month name + day is unambiguous.
@@ -1355,7 +1355,7 @@ def return_to_diary_list(page: Page, timeout_ms: int) -> None:
     if _diary_list_visible(page):
         return
 
-    LOGGER.info("Closing entry panel and returning to diary list…")
+    LOGGER.info("Closing entry panel and returning to diary list...")
     deadline = time.perf_counter() + (min(timeout_ms, 8000) / 1000.0)
     while time.perf_counter() < deadline:
         if _diary_list_visible(page):
@@ -1381,23 +1381,23 @@ def return_to_diary_list(page: Page, timeout_ms: int) -> None:
 
 def _cleanup_playwright_chromium_windows() -> None:
     """Stop headed Chromium orphans left by Playwright on Windows (ms-playwright only)."""
-    if sys.platform != "win32":
-        return
-    ps = (
-        "Get-CimInstance Win32_Process -Filter \"name='chrome.exe'\" -ErrorAction SilentlyContinue | "
-        "Where-Object { $_.ExecutablePath -like '*ms-playwright*' } | "
-        "ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"
-    )
     try:
-        subprocess.run(
-            ["powershell", "-NoProfile", "-Command", ps],
-            capture_output=True,
-            timeout=12,
-            check=False,
-        )
-        LOGGER.info("Windows Playwright Chromium cleanup finished.")
-    except Exception as e:
-        LOGGER.debug("Playwright Chromium cleanup skipped: %s", e)
+        from app.process_cleanup import cleanup_playwright_chromium
+    except ModuleNotFoundError:
+        # Direct script mode: app package may not be importable from cwd.
+        from process_cleanup import cleanup_playwright_chromium
+
+    cleanup_playwright_chromium()
+
+
+def _setup_headed_browser(browser: Browser, context: BrowserContext, page: Page) -> None:
+    try:
+        from app.browser_display import configure_headed_automation_browser
+    except ModuleNotFoundError:
+        # Direct script mode: app package may not be importable from cwd.
+        from browser_display import configure_headed_automation_browser
+
+    configure_headed_automation_browser(browser, context, page)
 
 
 def _close_browser_session(
@@ -1408,6 +1408,17 @@ def _close_browser_session(
     headed: bool = False,
 ) -> None:
     """Close Playwright page, context, and browser (headed windows on Windows)."""
+    if headed and browser is not None:
+        try:
+            try:
+                from app.browser_display import release_headed_automation_browser
+            except ModuleNotFoundError:
+                # Direct script mode: app package may not be importable from cwd.
+                from browser_display import release_headed_automation_browser
+
+            release_headed_automation_browser(browser)
+        except Exception as e:
+            LOGGER.debug("Release headed browser UI: %s", e)
     for label, resource in (("page", page), ("context", context), ("browser", browser)):
         if resource is None:
             continue
@@ -1437,7 +1448,7 @@ def try_open_existing_entry_edit(page: Page, iso_date: str, timeout_ms: int) -> 
     row = _find_portal_entry_row(page, iso_date, timeout_ms)
     if row is None:
         return False
-    LOGGER.info("Portal already has entry for %s — using Edit flow.", iso_date)
+    LOGGER.info("Portal already has entry for %s - using Edit flow.", iso_date)
     _click_edit_on_row(row, timeout_ms)
     page.wait_for_timeout(400)
     _dismiss_blocking_dialogs(page, timeout_ms)
@@ -1524,7 +1535,7 @@ def save_diary_entry_form(
         _dismiss_post_save_feedback(page, min(timeout_ms, 2000))
         if is_last_row:
             LOGGER.info(
-                "Last entry saved via edit for %s — no further rows; closing browser.",
+                "Last entry saved via edit for %s - no further rows; closing browser.",
                 row["Date"],
             )
             _try_close_edit_panel_once(page, min(timeout_ms, 3000))
@@ -1541,7 +1552,7 @@ def save_diary_entry_form(
         _dismiss_post_save_feedback(page, min(timeout_ms, 2000))
         if is_last_row:
             LOGGER.info(
-                "Last entry saved for %s — no further rows; closing browser.",
+                "Last entry saved for %s - no further rows; closing browser.",
                 row["Date"],
             )
             _finish_row_success(reason="last_row_create_exit")
@@ -1883,7 +1894,7 @@ def run(
     run_id = uuid.uuid4().hex
     if dry_run:
         for r in rows:
-            LOGGER.info("DRY RUN row %s: %s — %s", r["_row_no"], r["Date"], r["Internship"][:60])
+            LOGGER.info("DRY RUN row %s: %s - %s", r["_row_no"], r["Date"], r["Internship"][:60])
         return 0
 
     launch_kwargs: dict[str, Any] = {"headless": not headed, "slow_mo": slow_mo_ms}
@@ -1895,6 +1906,7 @@ def run(
             browser = pw.chromium.launch(**launch_kwargs)
             context = browser.new_context(viewport=viewport)
             page = context.new_page()
+            _setup_headed_browser(browser, context, page)
             try:
                 failed = _process_all_rows(
                     page,
@@ -1911,7 +1923,7 @@ def run(
                     entries_path=entries_path,
                 )
             except Exception:
-                LOGGER.info("Run failed — closing browser.")
+                LOGGER.info("Run failed - closing browser.")
                 _close_browser_session(page, context, browser, headed=headed)
                 raise
             LOGGER.info(
@@ -1925,6 +1937,8 @@ def run(
                 context = browser.new_context(viewport=viewport)
                 page = context.new_page()
                 LOGGER.info("Browser started (headed=%s).", headed)
+                if headed:
+                    _setup_headed_browser(browser, context, page)
                 failed = _process_all_rows(
                     page,
                     rows,
@@ -1951,7 +1965,7 @@ def run(
 
 def build_arg_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        description="VTU AIDS — Automated Internship Diary System (VTU Internyet uploader)."
+        description="VTU AIDS - Automated Internship Diary System (VTU Internyet uploader)."
     )
     p.add_argument(
         "--json",
@@ -2085,4 +2099,9 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    import atexit
+
+    # Works for both package launch (app.run_diary_bot) and direct script launch.
+    atexit.register(_cleanup_playwright_chromium_windows)
     raise SystemExit(main())
+

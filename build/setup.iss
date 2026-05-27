@@ -1,9 +1,13 @@
 [Setup]
 AppName=VTU AIDS
-AppVersion=1.0.3
+AppVersion=1.0.4
 AppPublisher=VTU AIDS Contributors
+AppPublisherURL=https://github.com/dhanushscience/VTU-AIDS
+AppSupportURL=https://github.com/dhanushscience/VTU-AIDS/issues
+AppUpdatesURL=https://github.com/dhanushscience/VTU-AIDS/releases
 DefaultDirName={autopf}\VTU AIDS
 DefaultGroupName=VTU AIDS
+OutputDir=Output
 OutputBaseFilename=VTU_AIDS_Setup
 Compression=lzma2
 SolidCompression=yes
@@ -21,6 +25,7 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 [Files]
 ; The actual PyInstaller output folder (must run PyInstaller first)
 Source: "..\dist\VTU AIDS\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "SMART_APP_CONTROL.txt"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\VTU AIDS"; Filename: "{app}\VTU AIDS.exe"; IconFilename: "{app}\VTU AIDS.ico"

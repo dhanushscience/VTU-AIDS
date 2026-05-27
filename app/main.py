@@ -4,40 +4,48 @@ from __future__ import annotations
 
 import json
 import sys
-import traceback
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.requests import Request
 from starlette.responses import Response
 from pydantic import BaseModel, Field
 
 from app.deps import dependency_status, genai_import_error
 from app.config_store import (
+    complete_setup,
     config_for_api,
+    config_for_api_from,
+    config_setup_status,
     config_with_secrets,
+    is_setup_required,
     normalize_api_key,
     resolve_gemini_api_key,
-    config_for_api_from,
     save_config,
     validate_api_key_format,
 )
+from app.errors import log_error, public_error_message, raise_http, error_context_from_request_path
 from app.date_resolver import resolve_dates
 from app.document_extract import IMAGE_EXTENSIONS, extract_text_from_upload
 from app.entries_store import delete_entry_by_date, load_entries, save_entries
 from app.excel_export import write_entries_excel
 from app.gemini_service import (
     DEFAULT_GEMINI_MODEL,
+    GEMINI_MODEL_OPTIONS,
     RECOMMENDED_MODELS,
     generate_entries,
     generate_single_entry,
 )
 from app.bot_runner import get_status as get_bot_status
 from app.bot_runner import start_bot
+from app.process_cleanup import (
+    install_shutdown_handlers,
+    reconcile_stale_automation,
+    shutdown_all,
+)
 from app.paths import (
     config_path,
     entries_excel_path,
@@ -52,8 +60,16 @@ ensure_ssl_certificates()
 PROJECT_ROOT = writable_root()
 STATIC_DIR = static_dir()
 
-APP_VERSION = "1.0.3"
+APP_VERSION = "1.0.4"
 _NO_CACHE = {"Cache-Control": "no-store, no-cache, must-revalidate", "Pragma": "no-cache"}
+
+
+def _require_setup_complete() -> None:
+    if is_setup_required():
+        raise HTTPException(
+            status_code=403,
+            detail="Complete the setup wizard first (portal login and Gemini API key).",
+        )
 
 
 class _NoCacheUiMiddleware(BaseHTTPMiddleware):
@@ -69,6 +85,35 @@ class _NoCacheUiMiddleware(BaseHTTPMiddleware):
 app = FastAPI(title="VTU AIDS", description="Automated Internship Diary System")
 app.add_middleware(_NoCacheUiMiddleware)
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+install_shutdown_handlers()
+
+
+@app.on_event("startup")
+def _startup_reconcile_automation() -> None:
+    reconcile_stale_automation()
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
+    """Keep explicit HTTPException details; only polish structured/non-string payloads."""
+    detail = exc.detail
+    if isinstance(detail, str):
+        return JSONResponse(status_code=exc.status_code, content={"detail": detail})
+
+    ctx = error_context_from_request_path(request.url.path)
+    detail = public_error_message(exc, context=ctx)
+    return JSONResponse(status_code=exc.status_code, content={"detail": detail})
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    ctx = error_context_from_request_path(request.url.path)
+    log_error(f"{request.method} {request.url.path}", exc)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": public_error_message(exc, context=ctx)},
+    )
 
 
 class ConfigUpdate(BaseModel):
@@ -161,12 +206,25 @@ class RunBotRequest(BaseModel):
     headed: bool = True
     skip_on_error: bool = True
 
+
+class SetupCompleteRequest(BaseModel):
+    username: str = ""
+    password: str = ""
+    gemini_api_key: str = ""
+    gemini_model: str = DEFAULT_GEMINI_MODEL
+    default_internship: str = ""
+    default_description_words: int = 80
+
 @app.post("/api/shutdown")
 def api_shutdown() -> dict[str, str]:
-    import threading
     import os
-    # Wait briefly so the response goes through, then kill process
-    threading.Timer(0.5, lambda: os._exit(0)).start()
+    import threading
+
+    def _exit_cleanly() -> None:
+        shutdown_all()
+        os._exit(0)
+
+    threading.Timer(0.4, _exit_cleanly).start()
     return {"status": "shutting_down"}
 
 
@@ -209,11 +267,38 @@ def get_config() -> dict[str, Any]:
     return config_for_api()
 
 
+@app.get("/api/setup/status")
+def api_setup_status() -> dict[str, Any]:
+    return config_setup_status()
+
+
+@app.post("/api/setup/complete")
+def api_setup_complete(body: SetupCompleteRequest) -> dict[str, Any]:
+    try:
+        saved = complete_setup(
+            username=body.username,
+            password=body.password,
+            gemini_api_key=body.gemini_api_key,
+            gemini_model=body.gemini_model,
+            default_internship=body.default_internship,
+            default_description_words=body.default_description_words,
+        )
+        return {
+            "ok": True,
+            "config": config_for_api_from(saved),
+            "setup": config_setup_status(saved),
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
 @app.get("/api/gemini-models")
 def list_gemini_models() -> dict[str, Any]:
     return {
         "default": DEFAULT_GEMINI_MODEL,
         "recommended": list(RECOMMENDED_MODELS),
+        "options": [{"id": mid, "label": label} for mid, label in GEMINI_MODEL_OPTIONS],
+        "auto_fallback": True,
     }
 
 
@@ -242,6 +327,7 @@ def post_config(body: ConfigUpdate) -> dict[str, Any]:
 
 @app.post("/api/dates/resolve")
 def api_dates_resolve(body: DatesResolveRequest) -> dict[str, Any]:
+    _require_setup_complete()
     try:
         if body.mode == "range" and (not body.from_date or not body.till):
             raise ValueError("Range mode requires 'from' and 'till'.")
@@ -254,6 +340,7 @@ def api_dates_resolve(body: DatesResolveRequest) -> dict[str, Any]:
 @app.post("/api/documents/extract")
 async def api_extract_document(file: UploadFile = File(...)) -> dict[str, Any]:
     """Extract text from documents, images (Gemini vision), or code files."""
+    _require_setup_complete()
     if not file.filename:
         raise HTTPException(status_code=400, detail="Missing filename.")
     try:
@@ -265,17 +352,13 @@ async def api_extract_document(file: UploadFile = File(...)) -> dict[str, Any]:
             api_key = resolve_gemini_api_key(cfg)
         result = extract_text_from_upload(file.filename, data, api_key=api_key)
         return {"ok": True, **result}
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Could not read file: {e}",
-        ) from e
+        raise_http(400, e, context="document", log=True)
 
 
 @app.post("/api/generate")
 def api_generate(body: GenerateRequest) -> dict[str, Any]:
+    _require_setup_complete()
     cfg = config_with_secrets()
     internship = body.internship.strip() or str(cfg.get("default_internship", "")).strip()
     hours = body.default_hours if body.default_hours is not None else cfg.get("default_hours", 6)
@@ -329,32 +412,17 @@ def api_generate(body: GenerateRequest) -> dict[str, Any]:
             "model_used": payload.get("model_used"),
         }
     except FileNotFoundError as e:
-        raise HTTPException(
-            status_code=500,
-            detail=(
-                f"Generate failed due to missing file: {e}. "
-                "Original error: HTTPS certificate file missing. "
-                "Restart the app after running Install VTU AIDS.bat, or remove a broken "
-                "SSL_CERT_FILE environment variable in Windows."
-            ),
-        ) from e
+        raise_http(500, e, context="generate", log=True)
     except (ValueError, RuntimeError) as e:
-        detail = str(e)
-        status = 429 if "quota" in detail.lower() or "rate limit" in detail.lower() else 400
-        raise HTTPException(status_code=status, detail=detail) from e
+        raise_http(400, e, context="generate", log=False)
     except Exception as e:
-        try:
-            (writable_root() / "vtu_aids_error.log").write_text(
-                traceback.format_exc(), encoding="utf-8"
-            )
-        except Exception:
-            pass
-        raise HTTPException(status_code=500, detail=f"Generate failed: {e}") from e
+        raise_http(500, e, context="generate", log=True)
 
 
 @app.post("/api/generate-day")
 def api_generate_day(body: GenerateDayRequest) -> dict[str, Any]:
     """Generate AI content for a single calendar day."""
+    _require_setup_complete()
     cfg = config_with_secrets()
     internship = body.internship.strip() or str(cfg.get("default_internship", "")).strip()
     hours_mode = (body.hours_mode or cfg.get("hours_mode", "constant")).strip().lower()
@@ -391,11 +459,9 @@ def api_generate_day(body: GenerateDayRequest) -> dict[str, Any]:
             hours_max=hours_max,
         )
     except (ValueError, RuntimeError) as e:
-        detail = str(e)
-        status = 429 if "quota" in detail.lower() or "rate limit" in detail.lower() else 400
-        raise HTTPException(status_code=status, detail=detail) from e
+        raise_http(400, e, context="generate", log=False)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Generate failed: {e}") from e
+        raise_http(500, e, context="generate", log=True)
 
 
 @app.get("/api/entries/preview")
@@ -461,6 +527,7 @@ def api_run_bot_status() -> dict[str, Any]:
 
 @app.post("/api/run-bot")
 def api_run_bot(body: RunBotRequest) -> dict[str, Any]:
+    _require_setup_complete()
     entries = load_entries()
     if not entries:
         raise HTTPException(status_code=400, detail="Generate entries with AI first.")

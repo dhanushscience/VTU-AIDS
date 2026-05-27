@@ -132,6 +132,12 @@ def bot_command(extra_args: list[str]) -> list[str]:
 def ensure_first_run_layout() -> None:
     """Create writable folders and default config on first desktop launch."""
     ensure_ssl_certificates()
+    try:
+        from app.process_cleanup import reconcile_stale_automation
+
+        reconcile_stale_automation()
+    except Exception:
+        pass
     generated_dir()
     cfg = config_path()
     if not cfg.is_file():

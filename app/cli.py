@@ -198,9 +198,11 @@ def _start_server_thread() -> None:
 def run_browser() -> None:
     """Open the UI in the default system browser (recommended — avoids black WebView)."""
     from app.paths import configure_playwright_for_frozen, ensure_first_run_layout, load_dotenv
+    from app.process_cleanup import reconcile_stale_automation
 
     _log("run_browser start")
     ensure_first_run_layout()
+    reconcile_stale_automation()
     load_dotenv()
     configure_playwright_for_frozen()
     _pick_port()
@@ -234,7 +236,9 @@ def run_browser() -> None:
             while True:
                 time.sleep(3600)
         except KeyboardInterrupt:
-            pass
+            from app.process_cleanup import shutdown_all
+
+            shutdown_all()
         return
 
     # pythonw: keep server alive in background
@@ -254,9 +258,11 @@ def run_browser() -> None:
 
 def run_desktop() -> None:
     from app.paths import configure_playwright_for_frozen, ensure_first_run_layout, load_dotenv, writable_root
+    from app.process_cleanup import reconcile_stale_automation
 
     _log("run_desktop start")
     ensure_first_run_layout()
+    reconcile_stale_automation()
     load_dotenv()
     configure_playwright_for_frozen()
     _pick_port()

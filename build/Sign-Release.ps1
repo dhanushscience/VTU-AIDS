@@ -3,7 +3,8 @@
 #   VTU_AIDS_SIGN_PFX = path to .pfx
 #   VTU_AIDS_SIGN_PASSWORD = certificate password
 param(
-    [string]$InstallRoot = (Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path))
+    [string]$InstallRoot = (Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)),
+    [string[]]$ExtraFiles = @()
 )
 
 $Dist = Join-Path $InstallRoot "dist\VTU AIDS"
@@ -40,4 +41,14 @@ foreach ($file in $targets) {
     if ($LASTEXITCODE -ne 0) { throw "signtool failed on $($file.Name) with exit $LASTEXITCODE" }
     $signed++
 }
-Write-Host "Signed $signed binary file(s) under dist\VTU AIDS" -ForegroundColor Green
+foreach ($extra in $ExtraFiles) {
+    if (-not (Test-Path $extra)) { continue }
+    $existing = Get-AuthenticodeSignature -FilePath $extra
+    if ($existing.Status -eq "Valid") { continue }
+    & $signtool.Source @signArgs $extra
+    if ($LASTEXITCODE -ne 0) { throw "signtool failed on $extra with exit $LASTEXITCODE" }
+    $signed++
+    Write-Host "Signed $extra" -ForegroundColor Green
+}
+
+Write-Host "Signed $signed binary file(s) (dist + extras)" -ForegroundColor Green

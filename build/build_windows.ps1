@@ -4,6 +4,11 @@
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 Set-Location $Root
+. (Join-Path $Root "build\SmartAppControl.ps1")
+if (Test-SmartAppControlBlocking) {
+    Show-SmartAppControlHelp -NonInteractive
+    Write-Host "Build continues, but SAC On will block unsigned installer/app on this PC." -ForegroundColor Yellow
+}
 
 $Python = Join-Path $Root ".venv\Scripts\python.exe"
 if (-not (Test-Path $Python)) {
@@ -50,8 +55,11 @@ if (-not (Test-Path $ISCC)) {
 if (Test-Path $ISCC) {
     $SetupScript = Join-Path $Root "build\setup.iss"
     & $ISCC $SetupScript
+    & (Join-Path $Root "build\Finalize-Output.ps1") -InstallRoot $Root
     Write-Host ""
-    Write-Host "Done! Installer created at Output\VTU_AIDS_Setup.exe" -ForegroundColor Green
+    Write-Host "Done! Installer: build\Output\VTU_AIDS_Setup.exe" -ForegroundColor Green
+    Write-Host "If Smart App Control blocks it, run: build\Output\Run-VTU_AIDS_Setup.bat" -ForegroundColor Yellow
+    Write-Host "  or: powershell -ExecutionPolicy Bypass -File build\Invoke-Installer.ps1" -ForegroundColor Yellow
 } else {
     Write-Host ""
     Write-Host "Done building PyInstaller bundle." -ForegroundColor Green

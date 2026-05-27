@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import random
 import re
+import time
 from pathlib import Path
 from typing import Any
 
@@ -14,20 +15,37 @@ from app.paths import skills_path
 
 DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
 
-# Tried in order after the user's Settings model (429 quota → next model).
+# Fallback order when the preferred model is busy, rate-limited, or overloaded.
 RECOMMENDED_MODELS: tuple[str, ...] = (
     "gemini-2.5-flash",
-    "gemini-2.0-flash-lite",
-    "gemini-1.5-flash",
-    "gemini-1.5-flash-8b",
-    "gemini-2.0-flash",
+    "gemini-3.5-flash",
+    "gemini-3.1-flash-lite",
+    "gemini-2.5-flash-lite",
+    "gemini-2.5-pro",
 )
 
-# Free tier often has limit 0 for this model; map to a working default.
+# UI labels (id, display name).
+GEMINI_MODEL_OPTIONS: tuple[tuple[str, str], ...] = (
+    ("gemini-2.5-flash", "gemini-2.5-flash (recommended)"),
+    ("gemini-3.5-flash", "gemini-3.5-flash (newest)"),
+    ("gemini-3.1-flash-lite", "gemini-3.1-flash-lite (fast)"),
+    ("gemini-2.5-flash-lite", "gemini-2.5-flash-lite (economy)"),
+    ("gemini-2.5-pro", "gemini-2.5-pro (best quality)"),
+)
+
+# Retired / deprecated model ids → current default.
 LEGACY_MODEL_MAP: dict[str, str] = {
+    "gemini-1.0-pro": "gemini-2.5-flash",
+    "gemini-1.5-flash": "gemini-2.5-flash",
+    "gemini-1.5-flash-8b": "gemini-2.5-flash-lite",
+    "gemini-1.5-pro": "gemini-2.5-pro",
     "gemini-2.0-flash": "gemini-2.5-flash",
     "gemini-2.0-flash-001": "gemini-2.5-flash",
+    "gemini-2.0-flash-lite": "gemini-2.5-flash-lite",
+    "gemini-2.0-flash-lite-001": "gemini-2.5-flash-lite",
 }
+
+_RETRY_DELAY_SEC = 1.5
 
 REQUIRED_KEYS = (
     "date",
@@ -198,43 +216,91 @@ def _response_text(response: Any) -> str:
     return raw_text
 
 
-def _call_gemini_with_fallback(client: Any, models: list[str], prompt: str) -> tuple[str, str]:
+def _is_invalid_api_key_error(code: int | None, msg: str) -> bool:
+    return (
+        "API_KEY_INVALID" in msg
+        or "API key not valid" in msg
+        or (code == 400 and "INVALID_ARGUMENT" in msg and "API key" in msg)
+    )
+
+
+def _is_switch_model_error(code: int | None, msg: str) -> bool:
+    """True when another model may succeed (quota, busy, overload, transient server errors)."""
+    lower = msg.lower()
+    if code in (429, 500, 502, 503, 504):
+        return True
+    markers = (
+        "resource_exhausted",
+        "quota",
+        "rate limit",
+        "ratelimit",
+        "unavailable",
+        "overloaded",
+        "overload",
+        "server busy",
+        "try again",
+        "temporarily unavailable",
+        "deadline_exceeded",
+        "high demand",
+        "capacity",
+        "internal error",
+    )
+    return any(m in lower for m in markers)
+
+
+def generate_content_with_fallback(
+    client: Any,
+    models: list[str],
+    contents: Any,
+) -> tuple[str, str]:
+    """Call Gemini; auto-switch models on quota/busy/overload."""
     from google.genai import errors as genai_errors
 
     last_err: Exception | None = None
-    quota_models: list[str] = []
+    retry_models: list[str] = []
 
-    for model in models:
+    for idx, model in enumerate(models):
         try:
-            response = client.models.generate_content(model=model, contents=prompt)
+            response = client.models.generate_content(model=model, contents=contents)
             return model, _response_text(response)
         except genai_errors.ClientError as e:
             last_err = e
             code = getattr(e, "status_code", None)
             msg = str(e)
-            if (
-                "API_KEY_INVALID" in msg
-                or "API key not valid" in msg
-                or (code == 400 and "INVALID_ARGUMENT" in msg and "API key" in msg)
-            ):
+            if _is_invalid_api_key_error(code, msg):
                 raise ValueError(
                     "Your Gemini API key was rejected by Google (invalid or revoked). "
                     "Create a new key at https://aistudio.google.com/apikey — open Settings, "
                     "paste the full key (starts with AIza), and click Save. "
                     "You can also set GEMINI_API_KEY in the environment."
                 ) from e
-            if code == 429 or "RESOURCE_EXHAUSTED" in msg or "quota" in msg.lower():
-                quota_models.append(model)
+            if _is_switch_model_error(code, msg):
+                retry_models.append(model)
+                if idx < len(models) - 1:
+                    time.sleep(_RETRY_DELAY_SEC)
                 continue
             raise ValueError(f"Gemini API error ({model}): {msg}") from e
+        except Exception as e:
+            last_err = e
+            msg = str(e)
+            if _is_switch_model_error(None, msg):
+                retry_models.append(model)
+                if idx < len(models) - 1:
+                    time.sleep(_RETRY_DELAY_SEC)
+                continue
+            raise
 
-    tried = ", ".join(quota_models) if quota_models else ", ".join(models)
+    tried = ", ".join(retry_models) if retry_models else ", ".join(models)
     raise ValueError(
-        "Gemini quota or rate limit exceeded for all tried models: "
-        f"{tried}. Wait a minute and retry, or choose another model in Settings "
-        "(recommended: gemini-2.5-flash or gemini-2.0-flash-lite). "
+        "Gemini is busy or rate-limited for all tried models: "
+        f"{tried}. Wait a minute and retry, or pick another model in Settings "
+        "(recommended: gemini-2.5-flash or gemini-3.5-flash). "
         "See https://ai.google.dev/gemini-api/docs/rate-limits"
     ) from last_err
+
+
+def _call_gemini_with_fallback(client: Any, models: list[str], prompt: str) -> tuple[str, str]:
+    return generate_content_with_fallback(client, models, prompt)
 
 
 def generate_entries(

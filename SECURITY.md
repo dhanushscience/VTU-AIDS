@@ -18,7 +18,7 @@ Use `student_config.example.json` as a template only.
 |------|----------|
 | Settings | `%LOCALAPPDATA%\VTU AIDS\student_config.json` |
 | Generated entries | `%LOCALAPPDATA%\VTU AIDS\generated\` |
-| Logs | `%LOCALAPPDATA%\VTU AIDS\vtu_aids_*.log` |
+| Logs | `%LOCALAPPDATA%\VTU AIDS\vtu_aids_*.log`, `bot_run.log`, `bot_status.json` |
 
 ## API keys
 

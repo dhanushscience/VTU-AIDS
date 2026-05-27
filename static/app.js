@@ -93,12 +93,75 @@ async function api(path, options = {}, timeoutMs = API_TIMEOUT_MS) {
   return data;
 }
 
+const LEGACY_GEMINI_MODELS = new Set([
+  "gemini-1.0-pro",
+  "gemini-1.5-pro",
+  "gemini-1.5-flash",
+  "gemini-1.5-flash-8b",
+  "gemini-2.0-flash",
+  "gemini-2.0-flash-001",
+  "gemini-2.0-flash-lite",
+  "gemini-2.0-flash-lite-001",
+]);
+
+const DEFAULT_GEMINI_OPTIONS = [
+  { id: "gemini-2.5-flash", label: "gemini-2.5-flash (recommended)" },
+  { id: "gemini-3.5-flash", label: "gemini-3.5-flash (newest)" },
+  { id: "gemini-3.1-flash-lite", label: "gemini-3.1-flash-lite (fast)" },
+  { id: "gemini-2.5-flash-lite", label: "gemini-2.5-flash-lite (economy)" },
+  { id: "gemini-2.5-pro", label: "gemini-2.5-pro (best quality)" },
+];
+
+function sanitizeGeminiOptions(options) {
+  const source = Array.isArray(options) && options.length ? options : DEFAULT_GEMINI_OPTIONS;
+  const dedup = new Map();
+  for (const opt of source) {
+    const id = String(opt?.id || "").trim();
+    if (!id || LEGACY_GEMINI_MODELS.has(id) || dedup.has(id)) continue;
+    const label = String(opt?.label || id).trim() || id;
+    dedup.set(id, { id, label });
+  }
+  return dedup.size ? [...dedup.values()] : [...DEFAULT_GEMINI_OPTIONS];
+}
+
+function fillGeminiModelSelect(selectEl, options, selected) {
+  if (!selectEl) return;
+  const prev = selected || selectEl.value || "gemini-2.5-flash";
+  selectEl.replaceChildren();
+  for (const opt of options) {
+    const o = document.createElement("option");
+    o.value = opt.id;
+    o.textContent = opt.label;
+    selectEl.appendChild(o);
+  }
+  if ([...selectEl.options].some((o) => o.value === prev)) {
+    selectEl.value = prev;
+  } else {
+    selectEl.value = "gemini-2.5-flash";
+  }
+}
+
+async function loadGeminiModelOptions() {
+  try {
+    const data = await api("/api/gemini-models");
+    const options = sanitizeGeminiOptions(data.options);
+    fillGeminiModelSelect($("cfg-gemini-model"), options);
+    fillGeminiModelSelect($("setup-gemini-model"), options);
+    return data;
+  } catch {
+    const options = sanitizeGeminiOptions([]);
+    fillGeminiModelSelect($("cfg-gemini-model"), options);
+    fillGeminiModelSelect($("setup-gemini-model"), options);
+    return null;
+  }
+}
+
 function applyConfigToForm(cfg) {
   $("cfg-username").value = cfg.username || "";
   const model = cfg.gemini_model || "gemini-2.5-flash";
   const sel = $("cfg-gemini-model");
-  if ([...sel.options].some((o) => o.value === model)) sel.value = model;
-  else sel.value = "gemini-2.5-flash";
+  if (sel && [...sel.options].some((o) => o.value === model)) sel.value = model;
+  else if (sel) sel.value = "gemini-2.5-flash";
   $("cfg-default-internship").value = cfg.default_internship || "";
   $("cfg-description-words").value = cfg.default_description_words ?? 80;
   state.defaultDescriptionWords = cfg.default_description_words ?? 80;
@@ -117,6 +180,7 @@ function applyConfigToForm(cfg) {
 }
 
 async function loadConfig() {
+  await loadGeminiModelOptions();
   const cfg = await api("/api/config");
   applyConfigToForm(cfg);
 }
@@ -1208,7 +1272,7 @@ async function runBot() {
   }
   clearStatus();
   showStatus(
-    "Saving entries and starting automation… A Chromium window should open.",
+    "Saving entries and starting automation… A Chromium window will open in front (view only).",
     "info"
   );
   setLoading($("btn-run"), true);
@@ -1393,6 +1457,7 @@ function initSettingsModal() {
     if (e.target === $("settings-modal")) closeDrawer();
   });
   document.addEventListener("keydown", (e) => {
+    if (document.body.classList.contains("setup-locked")) return;
     if (e.key === "Escape" && $("settings-modal").classList.contains("open")) closeDrawer();
   });
 }
@@ -1431,30 +1496,144 @@ function showInitError(err) {
   console.error("VTU AIDS init failed:", err);
 }
 
-function init() {
-  try {
-    initTabs();
-    initCalModeToggle();
-    initDocumentUpload();
-    initHoursModeTabs();
-    initRangeInputs();
-    initDateInputLimits();
-    initSettingsModal();
-    initCalendarNav();
-    renderCalendar();
-  } catch (err) {
-    showInitError(err);
+let setupWizardStep = 1;
+let mainActionsBound = false;
+
+function setSetupError(msg) {
+  const el = $("setup-error");
+  if (!el) return;
+  if (msg) {
+    el.textContent = msg;
+    el.classList.remove("hidden");
+  } else {
+    el.textContent = "";
+    el.classList.add("hidden");
+  }
+}
+
+function showSetupPanel(step) {
+  setupWizardStep = step;
+  $("setup-step-num").textContent = String(step);
+  for (let i = 1; i <= 3; i++) {
+    $("setup-panel-" + i).classList.toggle("hidden", i !== step);
+  }
+  const back = $("setup-back");
+  const next = $("setup-next");
+  back.classList.toggle("hidden", step <= 1);
+  if (step === 1) {
+    next.textContent = "Get started";
+  } else if (step === 3) {
+    next.textContent = "Finish";
+  } else {
+    next.textContent = "Next";
+  }
+  setSetupError("");
+}
+
+function openSetupWizard() {
+  const wiz = $("setup-wizard");
+  if (!wiz) return;
+  document.body.classList.add("setup-locked");
+  wiz.classList.remove("hidden");
+  wiz.setAttribute("aria-hidden", "false");
+  showSetupPanel(1);
+}
+
+function closeSetupWizard() {
+  const wiz = $("setup-wizard");
+  if (!wiz) return;
+  document.body.classList.remove("setup-locked");
+  wiz.classList.add("hidden");
+  wiz.setAttribute("aria-hidden", "true");
+}
+
+function validateSetupStep(step) {
+  if (step === 2) {
+    if (!$("setup-username").value.trim()) {
+      return "Enter your VTU Internyet username or email.";
+    }
+    if (!$("setup-password").value) {
+      return "Enter your VTU Internyet password.";
+    }
+  }
+  if (step === 3) {
+    if (!$("setup-gemini-key").value.trim()) {
+      return "Paste your Gemini API key from Google AI Studio.";
+    }
+  }
+  return "";
+}
+
+async function finishSetupWizard() {
+  const err = validateSetupStep(3);
+  if (err) {
+    setSetupError(err);
     return;
   }
-  renderDateChips([]);
-  state.generatedEntries = [];
-  state.activeEditDate = null;
-  state.activeEditIsNew = false;
-  $("entry-editor").classList.add("hidden");
-  renderPreview([]);
-  setPostGenerateEnabled(false);
-  updateCalHint();
-  refreshSection3View();
+  const btn = $("setup-next");
+  setLoading(btn, true);
+  setSetupError("");
+  try {
+    const body = {
+      username: $("setup-username").value.trim(),
+      password: $("setup-password").value,
+      gemini_api_key: $("setup-gemini-key").value.trim().replace(/\s+/g, ""),
+      gemini_model: $("setup-gemini-model").value.trim(),
+      default_internship: $("setup-internship").value.trim(),
+      default_description_words: 80,
+    };
+    const result = await api("/api/setup/complete", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+    if (result.config) applyConfigToForm(result.config);
+    closeSetupWizard();
+    bindMainActions();
+    showStatus("Setup complete. You can select dates and generate entries.", "ok");
+    void checkDependencies();
+  } catch (e) {
+    setSetupError(e.message);
+  } finally {
+    setLoading(btn, false);
+  }
+}
+
+function initSetupWizard() {
+  $("setup-back").addEventListener("click", () => {
+    if (setupWizardStep > 1) showSetupPanel(setupWizardStep - 1);
+  });
+  $("setup-next").addEventListener("click", async () => {
+    const err = validateSetupStep(setupWizardStep);
+    if (err) {
+      setSetupError(err);
+      return;
+    }
+    if (setupWizardStep < 3) {
+      showSetupPanel(setupWizardStep + 1);
+      return;
+    }
+    await finishSetupWizard();
+  });
+}
+
+async function ensureSetupComplete() {
+  try {
+    const status = await api("/api/setup/status");
+    if (status.setup_required) {
+      openSetupWizard();
+      return false;
+    }
+    bindMainActions();
+    return true;
+  } catch (e) {
+    showStatus(e.message, "error");
+    return false;
+  }
+}
+
+function bindMainActions() {
+  if (mainActionsBound) return;
+  mainActionsBound = true;
 
   $("btn-save-entry").addEventListener("click", async () => {
     try {
@@ -1524,9 +1703,39 @@ function init() {
     }
   });
 
-  loadConfig().catch((e) => showStatus(e.message, "error"));
   void loadPersistedEntries();
   void checkDependencies();
+}
+
+function init() {
+  try {
+    initTabs();
+    initCalModeToggle();
+    initDocumentUpload();
+    initHoursModeTabs();
+    initRangeInputs();
+    initDateInputLimits();
+    initSettingsModal();
+    initSetupWizard();
+    initCalendarNav();
+    renderCalendar();
+  } catch (err) {
+    showInitError(err);
+    return;
+  }
+  renderDateChips([]);
+  state.generatedEntries = [];
+  state.activeEditDate = null;
+  state.activeEditIsNew = false;
+  $("entry-editor").classList.add("hidden");
+  renderPreview([]);
+  setPostGenerateEnabled(false);
+  updateCalHint();
+  refreshSection3View();
+
+  loadConfig()
+    .then(() => ensureSetupComplete())
+    .catch((e) => showStatus(e.message, "error"));
 }
 
 async function checkDependencies() {

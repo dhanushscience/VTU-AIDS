@@ -170,11 +170,15 @@ def _extract_code(filename: str, data: bytes) -> str:
 
 def _extract_image_gemini(data: bytes, mime: str, api_key: str) -> str:
     from google import genai
-    from google.genai import types
-
-    from app.gemini_service import DEFAULT_GEMINI_MODEL, models_to_try, normalize_model_name
 
     from app.config_store import normalize_api_key, validate_api_key_format
+    from app.gemini_service import (
+        DEFAULT_GEMINI_MODEL,
+        generate_content_with_fallback,
+        models_to_try,
+        normalize_model_name,
+    )
+    from google.genai import types
 
     api_key = normalize_api_key(api_key)
     validate_api_key_format(api_key)
@@ -185,26 +189,14 @@ def _extract_image_gemini(data: bytes, mime: str, api_key: str) -> str:
         types.Part.from_bytes(data=data, mime_type=mime),
     ]
 
-    last_err: Exception | None = None
-    for model in models_to_try(normalize_model_name(DEFAULT_GEMINI_MODEL)):
-        try:
-            response = client.models.generate_content(model=model, contents=parts)
-            text = getattr(response, "text", None) or ""
-            if not text and getattr(response, "candidates", None):
-                cand = response.candidates[0]
-                text = "".join(
-                    getattr(p, "text", "") or ""
-                    for p in cand.content.parts
-                )
-            if text.strip():
-                return text.strip()
-        except Exception as e:
-            last_err = e
-            continue
-
-    raise ValueError(
-        f"Could not read image with Gemini. {last_err or 'No text returned.'}"
+    _, text = generate_content_with_fallback(
+        client,
+        models_to_try(normalize_model_name(DEFAULT_GEMINI_MODEL)),
+        parts,
     )
+    if text.strip():
+        return text.strip()
+    raise ValueError("Could not read image with Gemini (no text returned).")
 
 
 def _kind_label(ext: str) -> str:

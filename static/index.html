@@ -6,7 +6,7 @@
     <title>VTU AIDS</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.png" />
     <link rel="icon" href="/favicon.ico" />
-    <link rel="stylesheet" href="/static/styles.css?v=1.0.3" />
+    <link rel="stylesheet" href="/static/styles.css?v=1.0.4" />
   </head>
   <body>
     <div
@@ -356,6 +356,79 @@
       </footer>
     </div>
 
+    <div id="setup-wizard" class="setup-wizard hidden" aria-hidden="true">
+      <div class="setup-wizard-card" role="dialog" aria-modal="true" aria-labelledby="setup-wizard-title">
+        <p class="setup-wizard-step-label">
+          Step <span id="setup-step-num">1</span> of 3
+        </p>
+
+        <div id="setup-panel-1" class="setup-panel">
+          <h2 id="setup-wizard-title">Welcome to VTU AIDS</h2>
+          <p class="setup-lead">
+            This app generates internship diary entries with Gemini AI and uploads them to VTU Internyet.
+            We will ask for your portal login and API key once — stored only on this PC.
+          </p>
+          <p class="field-hint setup-install-hint">
+            If Windows blocked the installer (Smart App Control), see
+            <a
+              href="https://github.com/dhanushscience/VTU-AIDS/blob/main/docs/windows.md"
+              target="_blank"
+              rel="noopener"
+              >installation help</a
+            >.
+          </p>
+        </div>
+
+        <div id="setup-panel-2" class="setup-panel hidden">
+          <h2>Portal login</h2>
+          <p class="setup-lead">Use the same username and password as <strong>vtu.internyet.in</strong>.</p>
+          <div class="field">
+            <label for="setup-username">Username / email / USN</label>
+            <input type="text" id="setup-username" autocomplete="username" />
+          </div>
+          <div class="field">
+            <label for="setup-password">Password</label>
+            <input type="password" id="setup-password" autocomplete="new-password" />
+          </div>
+        </div>
+
+        <div id="setup-panel-3" class="setup-panel hidden">
+          <h2>Gemini API</h2>
+          <p class="setup-lead">
+            Create a free API key at
+            <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio</a>
+            (starts with <code>AIza</code>).
+          </p>
+          <div class="field">
+            <label for="setup-gemini-key">API key</label>
+            <input type="password" id="setup-gemini-key" placeholder="AIza…" autocomplete="off" />
+          </div>
+          <div class="field">
+            <label for="setup-gemini-model">Model</label>
+            <select id="setup-gemini-model">
+              <option value="gemini-2.5-flash">gemini-2.5-flash (recommended)</option>
+            </select>
+            <p class="field-hint">If Google’s servers are busy, VTU AIDS automatically tries other models.</p>
+          </div>
+          <div class="field">
+            <label for="setup-internship">Default internship name <span class="label-muted">(optional)</span></label>
+            <input
+              type="text"
+              id="setup-internship"
+              placeholder="Exact text from portal dropdown"
+            />
+          </div>
+        </div>
+
+        <p id="setup-error" class="setup-error hidden" role="alert"></p>
+
+        <div class="setup-wizard-actions">
+          <button type="button" class="btn btn-secondary hidden" id="setup-back">Back</button>
+          <button type="button" class="btn btn-primary" id="setup-next">Get started</button>
+        </div>
+      </div>
+    </div>
+
     <div class="drawer-overlay" id="settings-modal" aria-hidden="true">
       <aside class="drawer" role="dialog" aria-labelledby="drawer-title">
         <div class="drawer-head">
@@ -387,11 +460,8 @@
               <label for="cfg-gemini-model">Model</label>
               <select id="cfg-gemini-model">
                 <option value="gemini-2.5-flash">gemini-2.5-flash (recommended)</option>
-                <option value="gemini-2.0-flash-lite">gemini-2.0-flash-lite</option>
-                <option value="gemini-1.5-flash">gemini-1.5-flash</option>
-                <option value="gemini-1.5-flash-8b">gemini-1.5-flash-8b</option>
-                <option value="gemini-2.0-flash">gemini-2.0-flash</option>
               </select>
+              <p class="field-hint">Auto-switches to another model if the server is busy or rate-limited.</p>
             </div>
           </fieldset>
           <fieldset class="fieldset">
@@ -423,6 +493,6 @@
         }
       });
     </script>
-    <script src="/static/app.js?v=1.0.3"></script>
+    <script src="/static/app.js?v=1.0.4d"></script>
   </body>
 </html>

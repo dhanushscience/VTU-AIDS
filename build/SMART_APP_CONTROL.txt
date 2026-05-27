@@ -1,0 +1,16 @@
+Smart App Control blocked VTU AIDS?
+============================================
+
+Windows blocks unsigned apps while Smart App Control is On.
+Unblock-File alone does NOT bypass Smart App Control.
+
+Quick fix (your own PC):
+  1. Windows Security -> App & browser control -> Smart App Control -> Off
+  2. Restart if prompted, then run VTU_AIDS_Setup.exe again
+
+Install without the setup.exe (after SAC is Off):
+  From the project folder:
+    powershell -ExecutionPolicy Bypass -File build\Install-From-Dist.ps1
+
+Release builds: sign with VTU_AIDS_SIGN_PFX before publishing.
+More: https://github.com/dhanushscience/VTU-AIDS/blob/main/docs/windows.md

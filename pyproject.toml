@@ -1,6 +1,6 @@
 [project]
 name = "vtu-aids"
-version = "1.0.3"
+version = "1.0.4"
 description = "VTU AIDS - Automated Internship Diary System for VTU Internyet"
 readme = "README.md"
 license = { text = "MIT" }
