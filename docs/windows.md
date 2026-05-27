@@ -38,9 +38,9 @@ Signing covers `dist\VTU AIDS\*.exe` and `build\Output\VTU_AIDS_Setup.exe` when 
 
 The embedded desktop window (WebView2) can show a **black screen** on some PCs even when the server is fine.
 
-**Default (recommended):** The app opens the UI in **Chrome/Edge** (`--browser` mode). The desktop shortcut from the installer uses this too.
+**Default:** The app opens in an **embedded desktop window** (`--desktop` mode). The Start menu and desktop shortcuts from the installer use this too.
 
-**If you want the embedded window:** Run the app with the `--desktop` flag.
+**If the desktop window is black or fails:** Run with `--browser` or use **Run VTU AIDS (Browser).bat** from a dev install folder.
 
 **If nothing works:**
 

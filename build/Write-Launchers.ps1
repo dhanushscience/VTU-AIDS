@@ -34,16 +34,16 @@ start "" "%~dp0.venv\Scripts\pythonw.exe" "%~dp0vtu_aids.py" --desktop
 exit /b 0
 "@
 
-Set-Content -Path (Join-Path $InstallRoot "Run VTU AIDS.bat") -Value $browserBat -Encoding ASCII
-Set-Content -Path (Join-Path $InstallRoot "Run VTU AIDS (Browser).bat") -Value $browserBat -Encoding ASCII
+Set-Content -Path (Join-Path $InstallRoot "Run VTU AIDS.bat") -Value $desktopBat -Encoding ASCII
 Set-Content -Path (Join-Path $InstallRoot "Run VTU AIDS (Desktop).bat") -Value $desktopBat -Encoding ASCII
+Set-Content -Path (Join-Path $InstallRoot "Run VTU AIDS (Browser).bat") -Value $browserBat -Encoding ASCII
 
 $distBat = @"
 @echo off
 set "INSTALL=%~dp0..\.."
 if exist "%INSTALL%\.venv\Scripts\pythonw.exe" (
     cd /d "%INSTALL%"
-    start "" "%INSTALL%\.venv\Scripts\pythonw.exe" "%INSTALL%\vtu_aids.py" --browser
+    start "" "%INSTALL%\.venv\Scripts\pythonw.exe" "%INSTALL%\vtu_aids.py" --desktop
     exit /b 0
 )
 echo Run Install VTU AIDS.bat from the main VTU AIDS folder.

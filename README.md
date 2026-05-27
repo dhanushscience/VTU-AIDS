@@ -14,8 +14,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/dhanushscience/VTU-AIDS/releases/download/v1.0.5/VTU_AIDS_Setup.exe">
-    <img src="https://img.shields.io/badge/Download-VTU_AIDS_Setup.exe%20(v1.0.5)-2563eb?style=for-the-badge&logo=windows&logoColor=white" alt="Download VTU AIDS for Windows" />
+  <a href="https://github.com/dhanushscience/VTU-AIDS/releases/download/v1.0.6/VTU_AIDS_Setup.exe">
+    <img src="https://img.shields.io/badge/Download-VTU_AIDS_Setup.exe%20(v1.0.6)-2563eb?style=for-the-badge&logo=windows&logoColor=white" alt="Download VTU AIDS for Windows" />
   </a>
 </p>
 
@@ -25,7 +25,7 @@
 
 <p align="center">
   <a href="docs/INSTALL.md">Installation guide</a> ·
-  <a href="docs/RELEASE_v1.0.5.md">v1.0.5 release notes</a> ·
+  <a href="docs/RELEASE_v1.0.6.md">v1.0.6 release notes</a> ·
   <a href="docs/windows.md">Windows notes</a> ·
   <a href="SECURITY.md">Security</a> ·
   <a href="LICENSE">MIT License</a>
@@ -38,12 +38,11 @@
 
 ---
 
-## What's new in v1.0.5
+## What's new in v1.0.6
 
-- **Submitted date marking fixed** — successful automation now updates green calendar state reliably
-- **Automation success UX** — short success message with a `Done` refresh button below status
-- **Script-mode stability** — archive/cleanup import fallbacks fixed for direct script launches
-- **BOM-safe JSON loading** — avoids `Unexpected UTF-8 BOM` crashes in preview/save flows
+- **Desktop mode default** — installer and app launch in an embedded window (no browser tab required)
+- **Browser fallback** — `python vtu_aids.py --browser` or **Run VTU AIDS (Browser).bat** if the desktop window is black
+- **All v1.0.5 fixes included** — green submitted dates, automation `Done` button, script-mode stability, BOM-safe JSON
 - **All v1.0.4 improvements included** — setup wizard, friendly errors, view-only automation browser, clean shutdown, SAC helpers
 
 ---
@@ -74,7 +73,7 @@
 
 **For most users — no Python needed.**
 
-1. Download [**VTU_AIDS_Setup.exe**](https://github.com/dhanushscience/VTU-AIDS/releases/download/v1.0.5/VTU_AIDS_Setup.exe) (or see all [**Releases**](https://github.com/dhanushscience/VTU-AIDS/releases/tag/v1.0.5)).
+1. Download [**VTU_AIDS_Setup.exe**](https://github.com/dhanushscience/VTU-AIDS/releases/download/v1.0.6/VTU_AIDS_Setup.exe) (or see all [**Releases**](https://github.com/dhanushscience/VTU-AIDS/releases/tag/v1.0.6)).
 2. Run the installer and open **VTU AIDS** from the Start menu.
 3. Complete the **first-run setup wizard** (portal login + [Gemini API key](https://aistudio.google.com/apikey)).
 4. **Step 1** — pick dates · **Step 2** — describe work → **Generate with AI** · **Step 3** — **Run automation**.
@@ -94,15 +93,15 @@ python -m venv .venv
 .\.venv\Scripts\pip install -r requirements-desktop.txt
 .\.venv\Scripts\python -m playwright install chromium
 copy student_config.example.json student_config.json
-python vtu_aids.py --browser
+python vtu_aids.py
 ```
 
-Open **http://127.0.0.1:8765/** — complete the setup wizard or use **Settings**, then follow the 3-step UI.
+The app opens in an embedded desktop window. Complete the setup wizard or use **Settings**, then follow the 3-step UI.
 
 | Mode | Command |
 |------|---------|
-| Browser (recommended) | `python vtu_aids.py` or `python vtu_aids.py --browser` |
-| Embedded window | `python vtu_aids.py --desktop` |
+| Desktop (default) | `python vtu_aids.py` or `python vtu_aids.py --desktop` |
+| Browser | `python vtu_aids.py --browser` |
 | Dev + hot reload | `python vtu_aids.py --dev` |
 
 ---
@@ -207,15 +206,15 @@ Dry-run with sample data: `--dry-run` and `generated/entries.sample.json`.
 | Smart App Control blocks exe | Turn SAC **Off** (Windows Security); read `SMART_APP_CONTROL.txt` in install folder or [docs/windows.md](docs/windows.md) |
 | First launch | Setup wizard appears if credentials are missing |
 | Errors in UI | Short message shown; full details in `%LOCALAPPDATA%\VTU AIDS\vtu_aids_error.log` |
-| `Automation exited with code 1` + `No module named 'app'` | Update to latest build (v1.0.5+) with script-mode import fixes |
+| `Automation exited with code 1` + `No module named 'app'` | Update to latest build (v1.0.6+) with script-mode import fixes |
 | `Automation exited with code 1` + `Executable doesn't exist` | Run `python vtu_aids.py --install-browser` once to reinstall Playwright Chromium |
 | Automation stuck after force-close | Reopen VTU AIDS — stale bot state and orphan Chromium are cleared on startup |
 | App fails to start (~300 KB exe) | Reinstall — valid `VTU AIDS.exe` is ~19 MB |
-| Black desktop window | Use `python vtu_aids.py --browser` |
+| Black desktop window | Use `python vtu_aids.py --browser` (fallback) |
 | Generate button not visible | Hard refresh (Ctrl+Shift+R) or reinstall |
 | Logs | `vtu_aids_error.log`, `bot_run.log`, `vtu_aids_startup.log` in `%LOCALAPPDATA%\VTU AIDS\` |
 
-More: **[docs/windows.md](docs/windows.md)** · **[docs/RELEASE_v1.0.5.md](docs/RELEASE_v1.0.5.md)**
+More: **[docs/windows.md](docs/windows.md)** · **[docs/RELEASE_v1.0.6.md](docs/RELEASE_v1.0.6.md)** · [v1.0.5 notes](docs/RELEASE_v1.0.5.md)
 
 ---
 

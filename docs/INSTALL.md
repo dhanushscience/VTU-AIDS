@@ -2,7 +2,7 @@
 
 Step-by-step setup for **Windows** users and developers.
 
-**Current release:** [v1.0.5](https://github.com/dhanushscience/VTU-AIDS/releases/tag/v1.0.5)
+**Current release:** [v1.0.6](https://github.com/dhanushscience/VTU-AIDS/releases/tag/v1.0.6)
 
 ---
 
@@ -12,7 +12,7 @@ No Python required on your PC.
 
 ### 1. Download
 
-Get **`VTU_AIDS_Setup.exe`** from [Releases](https://github.com/dhanushscience/VTU-AIDS/releases/download/v1.0.5/VTU_AIDS_Setup.exe) (≈280 MB — includes Chromium for automation).
+Get **`VTU_AIDS_Setup.exe`** from [Releases](https://github.com/dhanushscience/VTU-AIDS/releases/download/v1.0.6/VTU_AIDS_Setup.exe) (≈280 MB — includes Chromium for automation).
 
 ### 2. Run the installer
 
@@ -86,15 +86,15 @@ Edit `student_config.json` or use the in-app setup wizard / Settings after launc
 
 | Command | Description |
 |---------|-------------|
-| `python vtu_aids.py` | Default — opens UI in your system browser |
-| `python vtu_aids.py --browser` | Same as default |
-| `python vtu_aids.py --desktop` | Embedded window (WebView2; may show black on some GPUs) |
+| `python vtu_aids.py` | Default — embedded desktop window |
+| `python vtu_aids.py --desktop` | Same as default |
+| `python vtu_aids.py --browser` | Opens in Chrome/Edge instead |
 | `python vtu_aids.py --dev` | Dev server with hot reload at http://127.0.0.1:8765/ |
 
 Alternative entry point:
 
 ```powershell
-.\.venv\Scripts\python -m app.cli --browser
+.\.venv\Scripts\python -m app.cli
 ```
 
 ### Build your own installer
@@ -117,7 +117,7 @@ See [docs/windows.md](windows.md) for Smart App Control, OneDrive, and troublesh
 | Problem | Fix |
 |---------|-----|
 | App won't start / tiny exe (~300 KB) | Reinstall from a fresh build; never patch the exe with rcedit. Valid size ≈ **19 MB**. |
-| Black desktop window | Use browser mode: `python vtu_aids.py --browser` |
+| Black desktop window | Use browser mode: `python vtu_aids.py --browser` or **Run VTU AIDS (Browser).bat** |
 | UI scripts failed | Ctrl+Shift+R hard refresh, or reinstall |
 | Smart App Control block | Turn SAC **Off** in Windows Security; dev: `build\Invoke-Installer.ps1` or `build\Install-From-Dist.ps1` — [windows.md](windows.md) |
 | Automation says already running | Close orphan Chromium or reopen VTU AIDS to reset stale state |

@@ -2,8 +2,9 @@
 """
 VTU AIDS — single entry point.
 
-  Double-click / Run VTU AIDS.bat     → opens in your browser (most reliable)
-  python vtu_aids.py                  → desktop window (pywebview)
+  Double-click / Run VTU AIDS.bat     → desktop window (pywebview)
+  python vtu_aids.py                  → desktop window (default)
+  python vtu_aids.py --browser        → opens in your system browser
   python vtu_aids.py --dev            → dev server + hot reload
   python vtu_aids.py --run-bot …      → Playwright automation
 """
@@ -106,7 +107,7 @@ def _error_html(message: str) -> str:
     border:1px solid #e4e4e7;border-radius:12px}}
 </style></head><body><div class="box">
 <h1>VTU AIDS could not start</h1><p>{safe}</p>
-<p>Try <b>Run VTU AIDS (Browser).bat</b> or reinstall with Install VTU AIDS.bat.</p>
+<p>Try <b>Run VTU AIDS (Browser).bat</b> if the desktop window fails, or reinstall with Install VTU AIDS.bat.</p>
 </div></body></html>"""
 
 
@@ -275,7 +276,7 @@ def run_desktop() -> None:
             msg += f"\n\n{log_path.read_text(encoding='utf-8')[-1500:]}"
         _log("server timeout: " + msg)
         raise SystemExit(
-            msg + "\n\nUse Run VTU AIDS (Browser).bat instead, or run Install VTU AIDS.bat."
+            msg + "\n\nUse Run VTU AIDS (Browser).bat if desktop mode fails, or run Install VTU AIDS.bat."
         )
 
     try:
@@ -295,16 +296,21 @@ def run_desktop() -> None:
     except Exception:
         pass
 
-    window = webview.create_window(
-        "VTU AIDS — Automated Internship Diary System",
-        url=URL,
-        width=1440,
-        height=920,
-        min_size=(1024, 680),
-        text_select=True,
-        background_color="#f4f4f5",
-        icon=icon_path,
-    )
+    window_kwargs: dict[str, object] = {
+        "title": "VTU AIDS — Automated Internship Diary System",
+        "url": URL,
+        "width": 1440,
+        "height": 920,
+        "min_size": (1024, 680),
+        "text_select": True,
+        "background_color": "#f4f4f5",
+    }
+    if icon_path:
+        import inspect
+
+        if "icon" in inspect.signature(webview.create_window).parameters:
+            window_kwargs["icon"] = icon_path
+    window = webview.create_window(**window_kwargs)
 
     # Do NOT force edgechromium first — it often shows a black window without error.
     for gui in (None, "edgechromium"):
@@ -384,12 +390,12 @@ def main() -> int:
     parser.add_argument(
         "--browser",
         action="store_true",
-        help="Open in system browser (recommended)",
+        help="Open in system browser instead of desktop window",
     )
     parser.add_argument(
         "--desktop",
         action="store_true",
-        help="Embedded desktop window (may show black on some PCs)",
+        help="Embedded desktop window (default)",
     )
     args = parser.parse_args()
 
@@ -403,7 +409,7 @@ def main() -> int:
         if args.desktop:
             run_desktop()
             return 0
-        run_browser()
+        run_desktop()
         return 0
     except SystemExit as e:
         if e.code in (0, None):
