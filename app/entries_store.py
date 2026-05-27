@@ -16,7 +16,7 @@ def load_entries() -> list[dict[str, Any]]:
     path = entries_json_path()
     if not path.is_file():
         return []
-    with path.open(encoding="utf-8") as f:
+    with path.open(encoding="utf-8-sig") as f:
         data = json.load(f)
     if isinstance(data, dict) and "entries" in data:
         items = data["entries"]
@@ -41,7 +41,7 @@ def load_submitted_entries() -> list[dict[str, Any]]:
     path = submitted_entries_json_path()
     if not path.is_file():
         return []
-    with path.open(encoding="utf-8") as f:
+    with path.open(encoding="utf-8-sig") as f:
         data = json.load(f)
     if isinstance(data, dict) and "entries" in data:
         items = data["entries"]

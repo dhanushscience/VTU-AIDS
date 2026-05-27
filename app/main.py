@@ -467,9 +467,17 @@ def api_generate_day(body: GenerateDayRequest) -> dict[str, Any]:
 @app.get("/api/entries/preview")
 def preview_entries() -> dict[str, Any]:
     from app.entries_store import load_submitted_entries
+    submitted = []
+    for entry in load_submitted_entries():
+        if not isinstance(entry, dict):
+            continue
+        date_val = str(entry.get("date") or entry.get("Date") or "").strip()[:10]
+        if not date_val:
+            continue
+        submitted.append({**entry, "date": date_val})
     return {
         "entries": load_entries(),
-        "submitted": load_submitted_entries()
+        "submitted": submitted,
     }
 
 

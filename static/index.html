@@ -6,7 +6,7 @@
     <title>VTU AIDS</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.png" />
     <link rel="icon" href="/favicon.ico" />
-    <link rel="stylesheet" href="/static/styles.css?v=1.0.4" />
+    <link rel="stylesheet" href="/static/styles.css?v=1.0.5" />
   </head>
   <body>
     <div
@@ -343,6 +343,14 @@
               <p class="field-hint action-hint">Step 3 unlocks after you generate entries in step 2.</p>
 
               <div id="status" class="toast toast-compact" role="status"></div>
+              <button
+                type="button"
+                class="btn btn-primary btn-block hidden"
+                id="btn-finish"
+                title="Refresh page after successful automation"
+              >
+                Done
+              </button>
             </article>
           </section>
         </div>
@@ -493,6 +501,6 @@
         }
       });
     </script>
-    <script src="/static/app.js?v=1.0.4d"></script>
+    <script src="/static/app.js?v=1.0.5"></script>
   </body>
 </html>

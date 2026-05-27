@@ -1,4 +1,4 @@
-"""
+﻿"""
 VTU AIDS - bulk upload internship diary entries to the VTU Internyet portal (JSON or Excel).
 
 JSON (generated/entries.json): wrapper {"entries": [...]} or top-level array.
@@ -1738,12 +1738,34 @@ def _remove_successful_entry_from_disk(entries_path: Path, date_str: str) -> Non
                     
                     # Archive to submitted_entries.json
                     try:
-                        from app.entries_store import load_submitted_entries, save_submitted_entries
-                        submitted = load_submitted_entries()
-                        # Avoid duplicates in archive
-                        if not any((x.get("Date") or x.get("date", "")).startswith(date_str[:10]) for x in submitted):
-                            submitted.append(successful_entry)
-                            save_submitted_entries(submitted)
+                        used_script_mode_fallback = False
+                        try:
+                            from app.entries_store import load_submitted_entries, save_submitted_entries
+                        except ModuleNotFoundError:
+                            # Direct script mode fallback: use local generated/submitted_entries.json.
+                            used_script_mode_fallback = True
+                            submitted_path = entries_path.parent / "submitted_entries.json"
+                            if submitted_path.is_file():
+                                with submitted_path.open("r", encoding="utf-8") as sf:
+                                    raw_submitted = json.load(sf)
+                                if isinstance(raw_submitted, dict) and "entries" in raw_submitted:
+                                    submitted = list(raw_submitted.get("entries") or [])
+                                elif isinstance(raw_submitted, list):
+                                    submitted = list(raw_submitted)
+                                else:
+                                    submitted = []
+                            else:
+                                submitted = []
+                            if not any((x.get("Date") or x.get("date", "")).startswith(date_str[:10]) for x in submitted):
+                                submitted.append(successful_entry)
+                                with submitted_path.open("w", encoding="utf-8") as sf:
+                                    json.dump({"entries": submitted}, sf, indent=2, ensure_ascii=False)
+                        if not used_script_mode_fallback:
+                            submitted = load_submitted_entries()
+                            # Avoid duplicates in archive
+                            if not any((x.get("Date") or x.get("date", "")).startswith(date_str[:10]) for x in submitted):
+                                submitted.append(successful_entry)
+                                save_submitted_entries(submitted)
                     except Exception as e:
                         LOGGER.warning("Failed to archive successful entry: %s", e)
         except Exception as e:

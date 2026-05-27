@@ -47,6 +47,28 @@ function setLoading(btn, loading) {
   btn.classList.toggle("loading", loading);
 }
 
+let automationFinishReloading = false;
+
+function setFinishActionVisible(visible) {
+  const btn = $("btn-finish");
+  if (!btn) return;
+  btn.classList.toggle("hidden", !visible);
+  if (visible) {
+    btn.disabled = false;
+    automationFinishReloading = false;
+  }
+}
+
+function finishAutomationAndReload() {
+  if (automationFinishReloading) return;
+  automationFinishReloading = true;
+  const btn = $("btn-finish");
+  if (btn) btn.disabled = true;
+  setFinishActionVisible(false);
+  clearStatus();
+  window.location.reload();
+}
+
 const API_TIMEOUT_MS = 20000;
 const API_GENERATE_TIMEOUT_MS = 180000; // Gemini can take 1–3 minutes
 const API_BOT_TIMEOUT_MS = 1800000; // Playwright: one entry ≈ 1–3 min; many dates need longer
@@ -253,8 +275,22 @@ function getEntryByDate(dateStr) {
   return state.generatedEntries.find((e) => (e.date || "").slice(0, 10) === dateStr);
 }
 
+function submittedEntryDate(entry) {
+  return String(entry?.date || entry?.Date || "").slice(0, 10);
+}
+
+function normalizeSubmittedEntries(entries) {
+  const seen = new Set();
+  return (entries || []).map((e) => ({ ...e, date: submittedEntryDate(e) })).filter((e) => {
+    if (!e.date) return false;
+    if (seen.has(e.date)) return false;
+    seen.add(e.date);
+    return true;
+  });
+}
+
 function getSubmittedEntryByDate(dateStr) {
-  return state.submittedEntries.find((e) => (e.date || "").slice(0, 10) === dateStr);
+  return state.submittedEntries.find((e) => submittedEntryDate(e) === dateStr);
 }
 
 function snapshotEntryFields(entry) {
@@ -655,6 +691,7 @@ function setPostGenerateEnabled(enabled) {
   state.hasGenerated = enabled;
   $("btn-download").disabled = !enabled;
   $("btn-run").disabled = !enabled;
+  if (!enabled) setFinishActionVisible(false);
   const modeWrap = $("cal-mode-wrap");
   if (modeWrap) modeWrap.classList.toggle("hidden", !enabled || state.mode === "range");
   if (enabled) {
@@ -685,7 +722,7 @@ function syncCalendarAfterGenerate() {
   const dates = [
     ...new Set([
       ...state.generatedEntries.map((e) => (e.date || "").slice(0, 10)),
-      ...state.submittedEntries.map((e) => (e.date || "").slice(0, 10)),
+      ...state.submittedEntries.map((e) => submittedEntryDate(e)),
     ].filter(Boolean))
   ].sort();
   state.selectedDates = new Set();
@@ -898,7 +935,7 @@ async function saveCurrentEntry() {
     entry = { ...payload, modified: true };
     if (submittedEntry) {
       entry.original = snapshotEntryFields(submittedEntry);
-      state.submittedEntries = state.submittedEntries.filter((e) => (e.date || "").slice(0, 10) !== dateStr);
+      state.submittedEntries = state.submittedEntries.filter((e) => submittedEntryDate(e) !== dateStr);
     }
     state.generatedEntries.push(entry);
     state.generatedEntries.sort((a, b) => (a.date || "").localeCompare(b.date || ""));
@@ -1190,7 +1227,7 @@ async function loadPersistedEntries() {
     if (!data.entries?.length && !data.submitted?.length) return;
 
     state.generatedEntries = (data.entries || []).map(normalizeLoadedEntry);
-    state.submittedEntries = data.submitted || [];
+    state.submittedEntries = normalizeSubmittedEntries(data.submitted);
     state.activeEditDate = null;
     state.activeEditIsNew = false;
     setPostGenerateEnabled(true);
@@ -1205,6 +1242,7 @@ async function loadPersistedEntries() {
 
 async function generateEntries() {
   clearStatus();
+  setFinishActionVisible(false);
   const dates = await resolveCurrentDates();
   const ctx = getStep2GenerateContext();
   const body = {
@@ -1271,6 +1309,7 @@ async function runBot() {
     return;
   }
   clearStatus();
+  setFinishActionVisible(false);
   showStatus(
     "Saving entries and starting automation… A Chromium window will open in front (view only).",
     "info"
@@ -1296,17 +1335,18 @@ async function runBot() {
     }
     const data = await waitForBotCompletion();
     let msg = data.ok
-      ? "Automation finished successfully."
+      ? "Automation completed successfully."
       : `Automation exited with code ${data.exit_code ?? "?"}.`;
-    if (data.error) msg += `\n\n${data.error}`;
-    if (data.stderr) msg += `\n\n${data.stderr}`;
-    if (data.stdout) msg += `\n\n${data.stdout}`;
+    if (!data.ok && data.error) msg += `\n\n${data.error}`;
     if (data.ok) {
+      // Reload persisted entries so submitted dates (green) are reflected immediately on the calendar.
+      await loadPersistedEntries();
       state.generatedEntries.forEach((e) => {
         e.modified = false;
       });
       renderPreview(state.generatedEntries);
       renderCalendar();
+      setFinishActionVisible(true);
     }
     showStatus(msg, data.ok ? "ok" : "error");
   } finally {
@@ -1702,6 +1742,8 @@ function bindMainActions() {
       showStatus(e.message, "error");
     }
   });
+
+  $("btn-finish")?.addEventListener("click", finishAutomationAndReload);
 
   void loadPersistedEntries();
   void checkDependencies();

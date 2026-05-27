@@ -2,7 +2,7 @@
 
 Step-by-step setup for **Windows** users and developers.
 
-**Current release:** [v1.0.4](https://github.com/dhanushscience/VTU-AIDS/releases/tag/v1.0.4)
+**Current release:** [v1.0.5](https://github.com/dhanushscience/VTU-AIDS/releases/tag/v1.0.5)
 
 ---
 
@@ -12,7 +12,7 @@ No Python required on your PC.
 
 ### 1. Download
 
-Get **`VTU_AIDS_Setup.exe`** from [Releases](https://github.com/dhanushscience/VTU-AIDS/releases/download/v1.0.4/VTU_AIDS_Setup.exe) (≈280 MB — includes Chromium for automation).
+Get **`VTU_AIDS_Setup.exe`** from [Releases](https://github.com/dhanushscience/VTU-AIDS/releases/download/v1.0.5/VTU_AIDS_Setup.exe) (≈280 MB — includes Chromium for automation).
 
 ### 2. Run the installer
 
