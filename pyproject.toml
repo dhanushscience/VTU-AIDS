@@ -17,8 +17,7 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/dhanushscience/vtu-aids"
-Repository = "https://github.com/dhanushscience/vtu-aids"
-
+Homepage = "https://github.com/dhanushscience/VTU-AIDS"
+Repository = "https://github.com/dhanushscience/VTU-AIDS"
 [tool.setuptools]
 packages = ["app"]
