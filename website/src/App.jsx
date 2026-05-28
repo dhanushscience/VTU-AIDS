@@ -10,30 +10,19 @@ function App() {
   const [flipped, setFlipped] = useState(false);
 
   useEffect(() => {
-    // Attempt to enter fullscreen shortly after page load.
-    const enterFullscreen = async () => {
-      const docEl = document.documentElement;
-      if (docEl.requestFullscreen && !document.fullscreenElement) {
-        try {
-          await docEl.requestFullscreen();
-        } catch {
-          // Fullscreen request may be blocked without user interaction.
-        }
-      }
-    };
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const isMobile =
+      window.matchMedia('(max-width: 768px)').matches ||
+      window.matchMedia('(hover: none) and (pointer: coarse)').matches;
 
-    const fullScreenTimer = setTimeout(() => {
-      enterFullscreen();
-    }, 250);
+    document.documentElement.classList.toggle('is-mobile', isMobile);
 
+    const flipDelay = prefersReducedMotion ? 0 : isMobile ? 2200 : 3000;
     const flipTimer = setTimeout(() => {
       setFlipped(true);
-    }, 3000);
+    }, flipDelay);
 
-    return () => {
-      clearTimeout(fullScreenTimer);
-      clearTimeout(flipTimer);
-    };
+    return () => clearTimeout(flipTimer);
   }, []);
 
   const handleDownload = (e) => {
@@ -287,7 +276,13 @@ function App() {
             </main>
 
             <footer className="back-footer">
-              &copy; {new Date().getFullYear()} VTU AIDS Project. Windows 10/11 supported. | Not affiliated with VTU or Internyet. • Ideadted by Dhanush Science 🖤
+              <span>&copy; {new Date().getFullYear()} VTU AIDS</span>
+              <span className="back-footer__sep">·</span>
+              <span>Windows 10/11</span>
+              <span className="back-footer__sep">·</span>
+              <span>Not affiliated with VTU or Internyet</span>
+              <span className="back-footer__sep">·</span>
+              <span>Ideated by Dhanush Science</span>
             </footer>
           </div>
 
