@@ -20,7 +20,8 @@
 </p>
 
 <p align="center">
-  <a href="https://dhanushscience.github.io/VTU-AIDS/">Marketing site</a> ·
+  <a href="https://dhanushscience.github.io/VTU-AIDS/">Marketing site</a>
+  <sub>(enable <a href="https://github.com/dhanushscience/VTU-AIDS/settings/pages">GitHub Pages</a>: branch <code>gh-pages</code>, folder <code>/</code>)</sub> ·
   <a href="docs/INSTALL.md">Installation guide</a> ·
   <a href="docs/windows.md">Windows troubleshooting</a> ·
   <a href="docs/RELEASE_v2.0.0.md">v2.0.0 release notes</a> ·
