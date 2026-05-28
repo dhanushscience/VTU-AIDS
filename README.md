@@ -5,12 +5,8 @@
 <h1 align="center">VTU AIDS</h1>
 
 <p align="center">
-  <strong>A</strong>utomated <strong>I</strong>nternship <strong>D</strong>iary <strong>S</strong>ystem for
+  Automated Internship Diary System for students using
   <a href="https://vtu.internyet.in">VTU Internyet</a>
-</p>
-
-<p align="center">
-  Generate internship diary entries with Gemini AI, review them locally, and upload to the portal with Playwright automation.
 </p>
 
 <p align="center">
@@ -20,217 +16,182 @@
 </p>
 
 <p align="center">
-  <sub>Windows 10/11 · ~483 MB · includes Chromium for automation</sub>
+  <sub>Windows 10/11 · installer size ~483 MB · includes Chromium</sub>
 </p>
 
 <p align="center">
   <a href="docs/INSTALL.md">Installation guide</a> ·
+  <a href="docs/windows.md">Windows troubleshooting</a> ·
   <a href="docs/RELEASE_v1.0.6.md">v1.0.6 release notes</a> ·
-  <a href="docs/windows.md">Windows notes</a> ·
-  <a href="SECURITY.md">Security</a> ·
-  <a href="LICENSE">MIT License</a>
+  <a href="SECURITY.md">Security</a>
 </p>
 
 ---
 
-> **Disclaimer:** Use only if permitted by your institution and portal terms. Not affiliated with VTU or Internyet.  
-> **Developed by Dhanush Science**
+> **Disclaimer:** Use only if allowed by your institution and portal terms.  
+> **Not affiliated with VTU or Internyet.**  
+> **Never share your credentials or API key.**
+
+## What this app does
+
+VTU AIDS helps students create internship diary entries faster.  
+You pick dates, write one clear summary of your work, and the app prepares day-wise entries using Gemini AI. You can review/edit everything before upload.
+
+## Who should use this
+
+- Students who already use the VTU Internyet diary portal
+- Students who want to save time writing repetitive day-wise entries
+- Students who are comfortable reviewing AI-generated text before submission
+
+### Prerequisites
+
+- Windows 10 or Windows 11
+- VTU Internyet account (username/password)
+- Gemini API key from [Google AI Studio](https://aistudio.google.com/apikey)
+- Permission from your institution to use automation tools
 
 ---
 
-## What's new in v1.0.6
+## Fastest start (recommended)
 
-- **Desktop mode default** — installer and app launch in an embedded window (no browser tab required)
-- **Browser fallback** — `python vtu_aids.py --browser` or **Run VTU AIDS (Browser).bat** if the desktop window is black
-- **All v1.0.5 fixes included** — green submitted dates, automation `Done` button, script-mode stability, BOM-safe JSON
-- **All v1.0.4 improvements included** — setup wizard, friendly errors, view-only automation browser, clean shutdown, SAC helpers
+1. Download [**VTU_AIDS_Setup.exe (v1.0.6)**](https://github.com/dhanushscience/VTU-AIDS/releases/download/v1.0.6/VTU_AIDS_Setup.exe) (**~483 MB**).
+2. Run the installer.
+3. Open **VTU AIDS** from Start menu.
+4. Complete first-run setup wizard.
+5. Use the 3-step workflow daily.
 
----
-
-## Screenshots
-
-| Overview | Date range | Settings |
-|:--:|:--:|:--:|
-| ![App overview](docs/images/01-app-overview.png) | ![Date range](docs/images/02-step1-date-range.png) | ![Settings](docs/images/03-settings.png) |
+Full beginner walkthrough: [docs/INSTALL.md](docs/INSTALL.md)
 
 ---
 
-## Features
+## Screenshots (what each screen means)
 
-- **3-step workflow** — select dates → describe your work → generate & upload
-- **First-run setup wizard** — guides portal login and Gemini API configuration
-- **Calendar or date range** with weekday skip (e.g. skip Sundays)
-- **Gemini AI** expands one work summary into per-day descriptions, skills, and learnings
-- **Optional documents** — PDF, PPTX, Word, images, code files as AI context
-- **Edit before upload** — tweak any day in Step 3
-- **Playwright automation** — logs into Internyet and submits entries (optional visible browser)
-- **Excel export** — download `entries.xlsx` anytime
-- **Windows installer** — standalone `.exe` with bundled Chromium (~483 MB)
+| Screenshot | What you should understand |
+|---|---|
+| ![App overview](docs/images/01-app-overview.png) | Main screen after setup: you will use Step 1, Step 2, then Step 3 in order. |
+| ![Date range mode](docs/images/02-step1-date-range.png) | Faster date selection: choose From/Till dates and skip weekdays like Sunday. |
+| ![Settings screen](docs/images/03-settings.png) | Safe place to update Internyet login, Gemini key, model, and default internship label. |
 
 ---
 
-## Quick start (Windows installer)
+## First run setup wizard (step by step)
 
-**For most users — no Python needed.**
+When you open the app first time, the setup wizard appears automatically.
 
-1. Download [**VTU_AIDS_Setup.exe**](https://github.com/dhanushscience/VTU-AIDS/releases/download/v1.0.6/VTU_AIDS_Setup.exe) (or see all [**Releases**](https://github.com/dhanushscience/VTU-AIDS/releases/tag/v1.0.6)).
-2. Run the installer and open **VTU AIDS** from the Start menu.
-3. Complete the **first-run setup wizard** (portal login + [Gemini API key](https://aistudio.google.com/apikey)).
-4. **Step 1** — pick dates · **Step 2** — describe work → **Generate with AI** · **Step 3** — **Run automation**.
+1. **Welcome**
+   - What you should see: intro message and **Next** button.
+2. **Portal login**
+   - Enter your VTU Internyet username and password.
+   - What you should see: fields accepted and move to next step.
+3. **Gemini API details**
+   - Paste API key, choose model, set optional default internship label.
+   - Click **Finish**.
+   - What you should see: main app becomes usable.
 
-📖 Full walkthrough with screenshots: **[docs/INSTALL.md](docs/INSTALL.md)**
-
----
-
-## Manual setup (developers)
-
-**Requirements:** Windows 10/11, Python 3.11+, Gemini API key, VTU Internyet account.
-
-```powershell
-git clone https://github.com/dhanushscience/VTU-AIDS.git
-cd VTU-AIDS
-python -m venv .venv
-.\.venv\Scripts\pip install -r requirements-desktop.txt
-.\.venv\Scripts\python -m playwright install chromium
-copy student_config.example.json student_config.json
-python vtu_aids.py
-```
-
-The app opens in an embedded desktop window. Complete the setup wizard or use **Settings**, then follow the 3-step UI.
-
-| Mode | Command |
-|------|---------|
-| Desktop (default) | `python vtu_aids.py` or `python vtu_aids.py --desktop` |
-| Browser | `python vtu_aids.py --browser` |
-| Dev + hot reload | `python vtu_aids.py --dev` |
+You can reopen these settings anytime from **Settings**.
 
 ---
 
-## How it works
+## Daily usage flow (student routine)
 
-```mermaid
-flowchart LR
-  A[Setup wizard] --> B[Select dates]
-  B --> C[Enter work summary]
-  C --> D[Gemini generates entries]
-  D --> E[Review and edit table]
-  E --> F[Playwright uploads to Internyet]
-```
+### Step 1: Select dates
 
-1. **Setup wizard (first run)**  
-   Enter VTU Internyet credentials and a Gemini API key. The main UI unlocks when setup is complete.
+- Pick individual days in the calendar, or switch to **Date range**
+- Optionally skip non-working weekdays
+- Optional: enable **Edit** mode if you want to edit rows later
 
-2. **Step 01 — Date selection**  
-   Click individual days or use **Date range** with From/Till dates. Skip weekends via weekday pills.
+### Step 2: Write your prompt
 
-3. **Step 02 — Your entry**  
-   Enter the exact **internship label** from the portal dropdown, describe what you did overall, optionally attach reference files, set words/day and work hours → click **Generate with AI**.
+- Enter internship label exactly as shown on portal
+- Write your work summary in simple language
+- Optional: attach reference files
+- Click **Generate with AI**
 
-4. **Step 03 — AI generated entries**  
-   Review the table. Turn on **Edit** in Step 1 to fix individual days. Click **Run automation** to upload (uses saved portal credentials). With **Visible browser** enabled, Chromium opens in front with a view-only overlay.
+### Step 3: Review and upload
 
-**Data location:** `%LOCALAPPDATA%\VTU AIDS\` (config, entries, logs) — not synced to OneDrive.
+- Read generated entries
+- Fix anything incorrect
+- Click **Run automation** to upload to Internyet
+- Optional: click **Download Excel** for local copy
 
 ---
 
-## Build the installer yourself
+## Visible browser option (important)
 
-```powershell
-powershell -ExecutionPolicy Bypass -File build\build_windows.ps1
-```
-
-Requires [Inno Setup 6](https://jrsoftware.org/isinfo.php). Output:
-
-`build\Output\VTU_AIDS_Setup.exe`
-
-Optional code signing: set `VTU_AIDS_SIGN_PFX` and `VTU_AIDS_SIGN_PASSWORD` before building.
-
-If **Smart App Control** blocks the unsigned installer on your PC, use `build\Output\Run-VTU_AIDS_Setup.bat` or see [docs/windows.md](docs/windows.md).
+- If **Visible browser** is ON, you can see Chromium while upload runs.
+- This view is for monitoring only (you cannot type/click inside automation page).
+- Use this when you want confidence about what is being uploaded.
+- If desktop window appears black, run browser mode fallback:
+  - `python vtu_aids.py --browser`
+  - or `Run VTU AIDS (Browser).bat` (developer installs)
 
 ---
 
-## Project structure
+## Data and privacy
 
-```
-vtu-aids/
-├── app/
-│   ├── cli.py              # Entry point (packaged as VTU AIDS.exe)
-│   ├── main.py             # REST API + static UI
-│   ├── errors.py           # User-facing errors + debug logging
-│   ├── browser_display.py  # Headed automation: focus + view-only overlay
-│   ├── process_cleanup.py  # Shutdown + stale bot/Chromium cleanup
-│   └── run_diary_bot.py    # Portal automation
-├── static/                 # Web UI (HTML, CSS, JS, logo)
-├── build/                  # PyInstaller spec, Inno Setup, SAC helpers
-├── docs/                   # Install guide, release notes, screenshots
-├── generated/              # JSON schema + sample (your entries are local)
-├── vtu_aids.py             # Dev launcher wrapper
-├── VTU_skills.txt          # Skills list for AI prompts
-└── student_config.example.json
-```
+Local storage path:
+
+`%LOCALAPPDATA%\VTU AIDS\`
+
+Saved here:
+
+- `student_config.json` (portal login + Gemini settings)
+- Generated entries and temporary automation files
+- Logs such as `vtu_aids_error.log`, `bot_run.log`, `vtu_aids_startup.log`
+
+Notes:
+
+- Data is local to your Windows user profile
+- Default storage is outside OneDrive sync location
+- Do not upload/share config files publicly
 
 ---
 
-## Configuration
+## Common errors and exact fixes
 
-Copy `student_config.example.json` → `student_config.json` (gitignored) or use the **setup wizard** / **Settings** in the app.
-
-| Field | Purpose |
-|-------|---------|
-| `username` / `password` | VTU Internyet login |
-| `gemini_api_key` | AI generation ([AI Studio](https://aistudio.google.com/apikey)) |
-| `default_internship` | Exact portal dropdown text |
-| `gemini_model` | e.g. `gemini-2.5-flash` |
-
-Optional: `.env` with `GEMINI_API_KEY=` (see `.env.example`).
+| Problem you see | Simple fix |
+|---|---|
+| Installer blocked with only `Okay` / `Get apps from the Store` | This is usually Smart App Control. Follow [docs/windows.md](docs/windows.md) and retry install. |
+| Black app window | Use browser fallback (`--browser`). |
+| Setup installed but app did not auto-open | This is expected in v1.0.6. Launch from Start menu manually. |
+| Generate or page looks stuck | Press `Ctrl+Shift+R` for hard refresh. |
+| Automation fails and asks for missing browser executable | Run `python vtu_aids.py --install-browser` (source/dev setups). |
+| Force-closed app and automation says already running | Open VTU AIDS again once; stale status is cleaned automatically. |
 
 ---
 
-## CLI (advanced)
+## FAQ for students
 
-```powershell
-.\.venv\Scripts\python app\run_diary_bot.py ^
-  --json generated\entries.json ^
-  --config student_config.json ^
-  --headed --skip-on-error
-```
+**Is this officially from VTU?**  
+No. It is not affiliated with VTU or Internyet.
 
-Dry-run with sample data: `--dry-run` and `generated/entries.sample.json`.
+**Do I still need to check my content?**  
+Yes. Always review AI text before upload.
 
----
+**Can I use it without a Gemini key?**  
+No. Generation requires a valid Gemini API key.
 
-## Troubleshooting
+**Will it submit without showing browser?**  
+Yes. You can run hidden or visible mode.
 
-| Issue | Solution |
-|-------|----------|
-| Smart App Control blocks exe | Turn SAC **Off** (Windows Security); read `SMART_APP_CONTROL.txt` in install folder or [docs/windows.md](docs/windows.md) |
-| First launch | Setup wizard appears if credentials are missing |
-| Errors in UI | Short message shown; full details in `%LOCALAPPDATA%\VTU AIDS\vtu_aids_error.log` |
-| `Automation exited with code 1` + `No module named 'app'` | Update to latest build (v1.0.6+) with script-mode import fixes |
-| `Automation exited with code 1` + `Executable doesn't exist` | Run `python vtu_aids.py --install-browser` once to reinstall Playwright Chromium |
-| Automation stuck after force-close | Reopen VTU AIDS — stale bot state and orphan Chromium are cleared on startup |
-| App fails to start (~300 KB exe) | Reinstall — valid `VTU AIDS.exe` is ~19 MB |
-| Black desktop window | Use `python vtu_aids.py --browser` (fallback) |
-| Generate button not visible | Hard refresh (Ctrl+Shift+R) or reinstall |
-| Logs | `vtu_aids_error.log`, `bot_run.log`, `vtu_aids_startup.log` in `%LOCALAPPDATA%\VTU AIDS\` |
+**Where can I edit credentials later?**  
+Open **Settings** in the app.
 
-More: **[docs/windows.md](docs/windows.md)** · **[docs/RELEASE_v1.0.6.md](docs/RELEASE_v1.0.6.md)** · [v1.0.5 notes](docs/RELEASE_v1.0.5.md)
+**Will uninstall remove my saved data?**  
+Installer can ask whether to remove `%LOCALAPPDATA%\VTU AIDS\` data.
 
 ---
 
-## Security
+## Additional docs
 
-**Never commit** `student_config.json`, `.env`, or `generated/entries.json`.  
-See **[SECURITY.md](SECURITY.md)**.
+- [docs/INSTALL.md](docs/INSTALL.md) - full beginner installation walkthrough
+- [docs/windows.md](docs/windows.md) - Windows block/fix reference
+- [docs/RELEASE_v1.0.6.md](docs/RELEASE_v1.0.6.md) - release changes
 
----
+## Security reminder
 
-## Contributing
+Never commit/share:
 
-Issues and pull requests welcome. Please do not include credentials in issues.
-
----
-
-## License
-
-[MIT](LICENSE) — Copyright (c) 2026 VTU AIDS contributors
+- `student_config.json`
+- `.env`
+- `generated/entries.json`

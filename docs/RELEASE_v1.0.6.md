@@ -1,73 +1,61 @@
 # VTU AIDS v1.0.6
 
-**Release date:** May 2026  
+Release for easier installation, first-run setup, and reliable daily use.
+
 **Platform:** Windows 10/11 (64-bit)
 
 ## Download
 
-| File | Size (approx.) | Notes |
-|------|----------------|-------|
-| [VTU_AIDS_Setup.exe](https://github.com/dhanushscience/VTU-AIDS/releases/download/v1.0.6/VTU_AIDS_Setup.exe) | ~483 MB | Recommended — includes Chromium for automation |
+- Installer: [VTU_AIDS_Setup.exe](https://github.com/dhanushscience/VTU-AIDS/releases/download/v1.0.6/VTU_AIDS_Setup.exe)
+- Size: **~483 MB** (includes Chromium for automation)
 
-If **Smart App Control** blocks the installer, see [docs/windows.md](windows.md) or `SMART_APP_CONTROL.txt` in the install folder.
-
----
-
-## Highlights
-
-### Desktop mode is now the default
-- `python vtu_aids.py` and **VTU AIDS.exe** (no flags) open the embedded desktop window.
-- Installer Start menu and optional desktop shortcut launch desktop mode automatically.
-- Dev launchers (`Run VTU AIDS.bat`) use `--desktop`; **Run VTU AIDS (Browser).bat** remains for fallback.
-
-### Documentation updates
-- README, INSTALL, and Windows guides reflect desktop-first launch and browser fallback.
-
-### Carried forward from v1.0.5
-- Submitted date green marking, automation success UX (`Done` button), script-mode import fixes, BOM-safe JSON loading, and all v1.0.4 setup/error/automation improvements.
+If Windows blocks install, see [windows.md](windows.md).
 
 ---
 
-## Install (end users)
+## Major improvements in v1.0.6
 
-1. Download **VTU_AIDS_Setup.exe** from [Releases](https://github.com/dhanushscience/VTU-AIDS/releases/tag/v1.0.6).
-2. Run the installer and open **VTU AIDS** from the Start menu (desktop window).
-3. Complete the setup wizard (Internyet login + [Gemini API key](https://aistudio.google.com/apikey)).
-4. **Step 1** dates → **Step 2** work summary → **Generate with AI** → **Step 3** **Run automation**.
+### 1) Desktop launch is default
 
-Full guide: [docs/INSTALL.md](INSTALL.md)
+- `VTU AIDS.exe` and `python vtu_aids.py` open desktop mode by default
+- Start menu launch is aligned with desktop-first behavior
+
+### 2) Browser fallback remains available
+
+- If desktop window is black, run:
+  - `python vtu_aids.py --browser`
+  - `Run VTU AIDS (Browser).bat` (developer installs)
+
+### 3) Installer flow is safer for restricted Windows PCs
+
+- Setup no longer auto-runs app at finish
+- Reduces confusion on policy-restricted systems where auto-run can be blocked
+
+### 4) Student documentation is now comprehensive
+
+- README rewritten with beginner flow, screenshots, privacy notes, FAQ
+- INSTALL guide now has numbered practical walkthrough + "what you should see" cues
+- Windows guide rewritten as simple troubleshooting reference
+
+### 5) Prior fixes included
+
+- v1.0.5 and v1.0.4 fixes are included in this release line
 
 ---
 
-## Upgrade from v1.0.5
+## Quick student flow
 
-- Install over the previous version (uninstall first is optional).
-- Your config in `%LOCALAPPDATA%\VTU AIDS\` is kept.
-- If the UI looks cached after upgrade, hard refresh once (`Ctrl+Shift+R`) when using browser fallback mode.
+1. Install `VTU_AIDS_Setup.exe` (~483 MB)
+2. Open VTU AIDS from Start menu
+3. Complete setup wizard (Internyet + Gemini API key)
+4. Daily use: Step 1 dates -> Step 2 prompt -> Step 3 review/upload
+
+Detailed install help: [INSTALL.md](INSTALL.md)
 
 ---
 
-## GitHub release body (copy-paste)
+## Notes and warnings
 
-```markdown
-## VTU AIDS v1.0.6
-
-Automated Internship Diary System for [VTU Internyet](https://vtu.internyet.in).
-
-### What's new
-- **Desktop mode default** — installer and `VTU AIDS.exe` open the embedded app window (no browser tab required)
-- **Launchers updated** — dev `.bat` files and docs match desktop-first; browser mode kept as fallback
-- **Includes v1.0.5 fixes** — green submitted dates, success UX, script-mode stability, BOM-safe JSON
-
-### Download
-- **VTU_AIDS_Setup.exe** (~483 MB, Windows 10/11, includes Chromium)
-
-### Quick start
-1. Install and open **VTU AIDS** from the Start menu
-2. Complete setup wizard
-3. Select dates → describe work → **Generate with AI** → **Run automation**
-
-📖 [Installation guide](https://github.com/dhanushscience/VTU-AIDS/blob/main/docs/INSTALL.md) · [Release notes](https://github.com/dhanushscience/VTU-AIDS/blob/main/docs/RELEASE_v1.0.6.md)
-
-> Use only if permitted by your institution. Not affiliated with VTU or Internyet.
-```
+- Use only if your institution permits this workflow
+- Not affiliated with VTU or Internyet
+- Keep credentials private and follow your institution policy

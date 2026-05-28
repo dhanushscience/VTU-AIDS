@@ -1,99 +1,136 @@
-# Windows notes
+# Windows Help (student-friendly)
 
-## Smart App Control (installer blocked)
-
-**Smart App Control** blocks unsigned apps. There is usually **no “Run anyway”** — only **Okay** or **Get apps from the Store**.
-
-`Unblock-File` and copying out of OneDrive fix **SmartScreen / Mark-of-the-Web**, not Smart App Control.
-
-### Fix on your PC (local / dev builds)
-
-1. Open **Windows Security** → **App & browser control** → **Smart App Control settings** → **Off**  
-   (A restart may be required.)
-2. Run the installer via one of:
-   - `build\Output\Run-VTU_AIDS_Setup.bat`
-   - `powershell -ExecutionPolicy Bypass -File build\Invoke-Installer.ps1`  
-     (copies the setup to `%TEMP%` and starts it — avoids OneDrive sync blocks)
-3. If the setup still fails, install without the installer:
-   - `powershell -ExecutionPolicy Bypass -File build\Install-From-Dist.ps1`  
-     Copies `dist\VTU AIDS` to `%LOCALAPPDATA%\VTU AIDS` and launches the app.
-
-See also `build\Output\SMART_APP_CONTROL.txt` after a full build.
-
-### Fix for public releases
-
-Sign the build with an Authenticode certificate before publishing:
-
-```powershell
-$env:VTU_AIDS_SIGN_PFX = "C:\path\to\cert.pfx"
-$env:VTU_AIDS_SIGN_PASSWORD = "your-password"
-powershell -ExecutionPolicy Bypass -File build\build_windows.ps1
-```
-
-Signing covers `dist\VTU AIDS\*.exe` and `build\Output\VTU_AIDS_Setup.exe` when `signtool.exe` is available.
+Use this page when Windows blocks install/run, or if app behavior looks confusing.
 
 ---
 
-## Black window on launch
+## Quick check list first
 
-The embedded desktop window (WebView2) can show a **black screen** on some PCs even when the server is fine.
+- Confirm you are installing **v1.0.6**
+- Confirm installer file name is `VTU_AIDS_Setup.exe`
+- Confirm size is around **~483 MB**
+- Prefer running installer from a local folder (for example `C:\Temp`)
 
-**Default:** The app opens in an **embedded desktop window** (`--desktop` mode). The Start menu and desktop shortcuts from the installer use this too.
-
-**If the desktop window is black or fails:** Run with `--browser` or use **Run VTU AIDS (Browser).bat** from a dev install folder.
-
-**If nothing works:**
-
-1. Reinstall via `VTU_AIDS_Setup.exe` or `build\Install-From-Dist.ps1`.
-2. Check `%LOCALAPPDATA%\VTU AIDS\vtu_aids_error.log` and `vtu_aids_startup.log`.
+If any of these are wrong, redownload from the official release link.
 
 ---
 
-## OneDrive install folder
+## 1) Smart App Control / Application Control block
 
-Do **not** build or run `VTU_AIDS_Setup.exe` from a synced **OneDrive** folder if you can avoid it. Sync adds a “downloaded from internet” mark and increases blocks.
+### What this usually looks like
 
-Prefer:
+- Installer does not run
+- Dialog may show only buttons like **Okay** or **Get apps from the Store**
+- You may not see a **Run anyway** button
 
-- `build\Invoke-Installer.ps1`, or  
-- Copy the installer to `C:\Temp` before running.
+This is commonly **Smart App Control** policy behavior.
 
-The Inno installer defaults to **Program Files** or **Local App Data**, not OneDrive.
+### What to do
+
+1. Open **Windows Security**
+2. Go to **App & browser control**
+3. Open **Smart App Control settings**
+4. Set to **Off** (restart if prompted)
+5. Run installer again
+
+What you should see after fix:
+
+- Installer wizard opens normally
+- You can complete installation
+
+Developer alternatives (if needed):
+
+- `build\Output\Run-VTU_AIDS_Setup.bat`
+- `powershell -ExecutionPolicy Bypass -File build\Invoke-Installer.ps1`
+- `powershell -ExecutionPolicy Bypass -File build\Install-From-Dist.ps1`
 
 ---
 
-## Post-install: SmartScreen only (not SAC)
+## 2) SmartScreen block after install (different from SAC)
 
-If the **installed app** is blocked by SmartScreen (not Smart App Control), use **`Fix block and run VTU AIDS.bat`** in the install folder. That runs `Unblock-File` on the installed files.
+### What this looks like
+
+- VTU AIDS is installed
+- App launch gets blocked by Windows warning
+
+### What to do
+
+- Run `Fix block and run VTU AIDS.bat` from install folder
+
+What you should see:
+
+- App opens after unblock step
 
 ---
 
-## Control Panel
+## 3) OneDrive-related install problems
 
-The installer registers **VTU AIDS** under **Settings → Apps** for uninstallation.
+### Why this happens
+
+Installing or launching from OneDrive-synced folders can add extra trust warnings or file locks.
+
+### Safer approach
+
+- Move installer to `C:\Temp` and run there, or
+- Use `build\Invoke-Installer.ps1` (dev/local builds)
+
+What you should see:
+
+- Fewer Windows block prompts
+- More reliable install completion
 
 ---
 
-## Automation and clean shutdown
+## 4) Black app window on launch
 
-### Normal quit
+The default launch mode is desktop window. Some systems may show black screen due to local WebView/GPU issues.
 
-Use **Quit** in the app (top right). This stops the local server, terminates any running automation subprocess, and closes Playwright Chromium windows.
+### What to do
 
-### Force-close (Task Manager)
+- Use browser fallback mode:
+  - `python vtu_aids.py --browser`
+  - or `Run VTU AIDS (Browser).bat` (dev installs)
 
-If you end **VTU AIDS** or the bot process in Task Manager, Windows cannot run cleanup code in that moment. On the **next launch**, VTU AIDS:
+What you should see:
 
-- Detects stale `bot_status.json` (`running: true` but bot PID gone)
-- Resets automation status
-- Closes orphan `ms-playwright` Chromium processes
+- App opens in your normal browser at local address
+- Full workflow still works
 
-If a Chromium window remains, close it manually or reopen VTU AIDS once.
+![Main app screen reference](images/01-app-overview.png)
 
-### Logs
+Reference: if this screen appears in browser mode, fallback is working correctly.
 
-| Log | Purpose |
-|-----|---------|
-| `vtu_aids_error.log` | API and generation errors (full traceback) |
-| `bot_run.log` | Playwright automation output |
-| `vtu_aids_startup.log` | App launch diagnostics |
+---
+
+## 5) Visible browser mode during automation
+
+If you enable **Visible browser**, Chromium opens so you can observe upload.
+
+What to expect:
+
+- You can watch navigation/fill actions
+- It is view-only for automation safety
+- You can still close/minimize the browser window
+
+If upload freezes, reopen app once and retry.
+
+---
+
+## 6) Logs for support
+
+If something still fails, collect these files:
+
+- `%LOCALAPPDATA%\VTU AIDS\vtu_aids_error.log`
+- `%LOCALAPPDATA%\VTU AIDS\bot_run.log`
+- `%LOCALAPPDATA%\VTU AIDS\vtu_aids_startup.log`
+
+These logs help identify exact issue quickly.
+
+---
+
+## 7) Uninstall and cleanup
+
+- Uninstall from **Settings > Apps > VTU AIDS**
+- Optional: delete `%LOCALAPPDATA%\VTU AIDS\` to remove saved local data
+
+On uninstall, the app can ask whether to remove generated entries and saved credentials.
