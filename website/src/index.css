@@ -124,6 +124,26 @@ body {
   animation: quake 4s ease-in-out 0.2s 1 both;
 }
 
+.panic-popup-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.panic-popup-layer .panic-popup {
+  pointer-events: auto;
+  position: relative;
+  top: auto;
+  left: auto;
+  transform: scale(0.96);
+  animation: popupAppearLayer 0.45s ease-out 1s forwards, popupShakeLayer 4s ease-in-out 1s both;
+}
+
 .panic-popup {
   position: absolute;
   top: 50%;
@@ -139,6 +159,25 @@ body {
   animation: popupAppear 0.45s ease-out 1s forwards, popupShake 4s ease-in-out 1s both;
   z-index: 10;
   border: 1px solid rgba(255,255,255,0.18);
+}
+
+@keyframes popupAppearLayer {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes popupShakeLayer {
+  0%, 100% { transform: scale(1) rotate(0deg); }
+  20% { transform: scale(1.01) rotate(-1deg); }
+  40% { transform: scale(0.99) rotate(1.2deg); }
+  60% { transform: scale(1.02) rotate(-1.5deg); }
+  80% { transform: scale(0.98) rotate(0.8deg); }
 }
 
 .panic-popup__header {
@@ -1147,6 +1186,125 @@ footer {
   opacity: 0.45;
 }
 
+/* =========================================
+   MOBILE SAFARI: flat intro (no 3D flip during chaos)
+   preserve-3d breaks most child animations on iOS
+   ========================================= */
+html.is-mobile .app-container {
+  perspective: none;
+}
+
+html.is-mobile .flipper {
+  transform-style: flat;
+  transition: none;
+}
+
+html.is-mobile .flipper.is-flipped {
+  transform: none;
+}
+
+html.is-mobile .face {
+  backface-visibility: visible;
+  -webkit-backface-visibility: visible;
+}
+
+html.is-mobile .face.back {
+  transform: none;
+}
+
+html.is-mobile .flipper:not(.is-flipped) .face.back {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+html.is-mobile .flipper.is-flipped .face.front {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+html.is-mobile .flipper.is-flipped .face.back {
+  opacity: 1;
+  visibility: visible;
+  animation: mobileBackReveal 0.55s ease-out both;
+}
+
+@keyframes mobileBackReveal {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Full-screen red panic flash (works on iOS; not tied to 3D face) */
+html.is-mobile.intro-active::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  pointer-events: none;
+  animation: pagePanic 0.35s ease-in-out 1s 12 alternate forwards;
+}
+
+html.is-mobile.intro-active .face.front {
+  animation: none;
+}
+
+html.is-mobile.intro-active .portal-skeleton {
+  animation: quake 4s ease-in-out 0.2s 1 both !important;
+}
+
+html.is-mobile.intro-active .manual-status {
+  animation: portalBlink 0.18s ease-in-out infinite alternate !important;
+}
+
+html.is-mobile.intro-active .manual-progress__fill {
+  animation: manualFill 4s linear forwards !important;
+}
+
+html.is-mobile.intro-active .portal-topbar {
+  animation: portalGlow 4s linear forwards, topbarChaosMobile 4s ease-in-out 0.3s both !important;
+}
+
+html.is-mobile.intro-active .portal-sidebar {
+  animation: chaosStrobe 4s ease-in-out 0.2s both !important;
+}
+
+html.is-mobile.intro-active .portal-main {
+  animation: chaosStrobe 4s ease-in-out 0.35s both !important;
+}
+
+html.is-mobile.intro-active .portal-body {
+  animation: bodyShakeMobile 4s ease-in-out 0.25s both !important;
+}
+
+html.is-mobile.intro-active .portal-card,
+html.is-mobile.intro-active .field-block,
+html.is-mobile.intro-active .text-block .text-line {
+  animation: rightPop 0.7s ease-out both, chaosRattleMobile 4s ease-in-out 0.45s both !important;
+}
+
+html.is-mobile.intro-active .sidebar-item {
+  animation: sidebarJitter 0.85s ease-in-out infinite !important;
+}
+
+@keyframes chaosStrobe {
+  0%, 100% {
+    opacity: 1;
+    filter: none;
+    box-shadow: 0 18px 40px rgba(15, 23, 42, 0.06);
+  }
+  35% {
+    opacity: 0.55;
+    filter: saturate(1.35);
+    box-shadow: 0 0 28px rgba(239, 68, 68, 0.35);
+  }
+  70% {
+    opacity: 0.2;
+    filter: blur(0.6px);
+    box-shadow: 0 0 36px rgba(220, 38, 38, 0.45);
+  }
+}
+
 /* Mobile chaos: smaller motion so effects stay on-screen in narrow viewports */
 @keyframes portalFailLeftMobile {
   0% { transform: translate(0, 0) rotate(0deg) skew(0deg); opacity: 1; }
@@ -1273,10 +1431,12 @@ footer {
     line-height: 1.4;
   }
 
-  .panic-popup {
-    width: min(340px, calc(100% - 1.5rem));
+  .panic-popup-layer .panic-popup {
+    width: min(340px, 100%);
     padding: 1.1rem 1.15rem;
     border-radius: 18px;
+    max-height: min(50vh, 320px);
+    overflow-y: auto;
   }
 
   .panic-popup__header {
@@ -1287,15 +1447,6 @@ footer {
     font-size: 0.92rem;
   }
 
-  .panic-popup {
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    z-index: 100;
-    max-height: min(42vh, 280px);
-    overflow-y: auto;
-  }
-
   .portal-sidebar {
     display: flex;
     flex-direction: row;
@@ -1303,8 +1454,6 @@ footer {
     gap: 0.5rem;
     min-height: unset;
     padding: 0.65rem;
-    animation: portalFailLeftMobile 4s cubic-bezier(0.36, 0.07, 0.19, 0.97) forwards;
-    animation-delay: 0.2s;
   }
 
   .portal-sidebar .sidebar-title {
@@ -1319,29 +1468,9 @@ footer {
     grid-template-columns: 28px 1fr;
   }
 
-  .portal-main {
-    animation: portalFailRightMobile 4s cubic-bezier(0.36, 0.07, 0.19, 0.97) forwards;
-    animation-delay: 0.2s;
-  }
-
   .portal-body {
     grid-template-columns: 1fr;
     gap: 0.75rem;
-    animation: bodyShakeMobile 4s ease-in-out 0.25s both;
-  }
-
-  .portal-topbar {
-    animation: portalGlow 4s linear forwards, topbarChaosMobile 4s ease-in-out 0.3s both;
-  }
-
-  .manual-status {
-    animation: portalBlink 0.2s ease-in-out infinite alternate;
-  }
-
-  .portal-card,
-  .field-block,
-  .text-block .text-line {
-    animation: rightPop 0.7s ease-out both, chaosRattleMobile 4s ease-in-out 0.4s both;
   }
 
   .portal-card {
@@ -1467,10 +1596,6 @@ footer {
     overflow: visible;
   }
 
-  .step-panel {
-    animation: none;
-  }
-
   .mock-panel:hover {
     transform: none;
   }
@@ -1481,17 +1606,15 @@ footer {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  html.intro-active::before {
+    animation: none !important;
+  }
+
   .flipper {
     transition-duration: 0.01ms !important;
   }
 
-  /* Keep back-face mockup animations off; intro chaos still runs on mobile unless user opts out. */
-  .step-panel,
-  .anim-date,
-  .anim-text,
-  .anim-btn-gen,
-  .anim-btn-run,
-  .anim-ai {
+  html.is-mobile .flipper.is-flipped .face.back {
     animation: none !important;
   }
 }

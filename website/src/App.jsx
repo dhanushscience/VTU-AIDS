@@ -15,15 +15,23 @@ function App() {
       window.matchMedia('(max-width: 768px)').matches ||
       window.matchMedia('(hover: none) and (pointer: coarse)').matches;
 
-    document.documentElement.classList.toggle('is-mobile', isMobile);
+    const root = document.documentElement;
+    root.classList.toggle('is-mobile', isMobile);
+    if (!prefersReducedMotion) {
+      root.classList.add('intro-active');
+    }
 
-    // Chaos intro runs ~4s (popup at 1s, fail animations through 4s) — flip only after it finishes.
-    const flipDelay = prefersReducedMotion ? 0 : 4500;
+    // Chaos intro ~4s; extra buffer on mobile for slower GPUs / Safari.
+    const flipDelay = prefersReducedMotion ? 800 : isMobile ? 5200 : 4500;
     const flipTimer = setTimeout(() => {
       setFlipped(true);
+      root.classList.remove('intro-active');
     }, flipDelay);
 
-    return () => clearTimeout(flipTimer);
+    return () => {
+      clearTimeout(flipTimer);
+      root.classList.remove('intro-active');
+    };
   }, []);
 
   const handleDownload = (e) => {
@@ -70,6 +78,16 @@ function App() {
         )}
       </div>
 
+      {/* Panic popup outside 3D flipper — iOS Safari drops animations inside preserve-3d */}
+      {!flipped && (
+        <div className="panic-popup-layer" aria-live="polite">
+          <div className="panic-popup">
+            <div className="panic-popup__header">Stop wasting time.</div>
+            <div className="panic-popup__text">Save time and do productive work with VTU AIDS.</div>
+          </div>
+        </div>
+      )}
+
       <div className="app-container">
         <div className={`flipper ${flipped ? 'is-flipped' : ''}`}>
           
@@ -90,11 +108,6 @@ function App() {
                 <div className="manual-progress">
                   <div className="manual-progress__fill"></div>
                 </div>
-              </div>
-
-              <div className="panic-popup">
-                <div className="panic-popup__header">Stop wasting time.</div>
-                <div className="panic-popup__text">Save time and do productive work with VTU AIDS.</div>
               </div>
 
               <div className="portal-body">
