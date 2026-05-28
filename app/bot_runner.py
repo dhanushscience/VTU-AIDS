@@ -10,6 +10,7 @@ import traceback
 from datetime import datetime, timezone
 from typing import Any
 
+from app.diagnostics import get_run_id
 from app.paths import (
     bot_command,
     bot_working_directory,
@@ -186,6 +187,7 @@ def _run_subprocess(headed: bool, skip_on_error: bool) -> None:
                 "error": None,
                 "cmd": " ".join(cmd),
                 "bot_pid": proc.pid,
+                "run_id": get_run_id(),
             }
         )
 
@@ -212,6 +214,7 @@ def _run_subprocess(headed: bool, skip_on_error: bool) -> None:
                 "stderr": (stderr or "")[-8000:],
                 "error": None,
                 "bot_pid": proc.pid,
+                "run_id": get_run_id(),
             }
         )
     except Exception as e:
@@ -232,6 +235,7 @@ def _run_subprocess(headed: bool, skip_on_error: bool) -> None:
                 "stderr": tb[-8000:],
                 "error": str(e),
                 "bot_pid": proc.pid if proc is not None else None,
+                "run_id": get_run_id(),
             }
         )
     finally:
@@ -269,6 +273,7 @@ def start_bot(*, headed: bool, skip_on_error: bool) -> dict[str, Any]:
                 "error": None,
                 "cmd": "",
                 "bot_pid": None,
+                "run_id": get_run_id(),
             }
         )
 
@@ -300,4 +305,38 @@ def start_bot(*, headed: bool, skip_on_error: bool) -> dict[str, Any]:
         "ok": True,
         "started": True,
         "message": "Automation started. A Chromium window will open in front (view only).",
+    }
+
+
+def stop_bot() -> dict[str, Any]:
+    """Stop automation run and mark status as stopped by user."""
+    with _lock:
+        st = _read_status()
+        if not st.get("running"):
+            return {
+                "ok": True,
+                "stopped": False,
+                "message": "Automation is not running.",
+            }
+
+        started_at = st.get("started_at") or _now()
+        terminate_running_bot()
+        cleanup_playwright_chromium()
+        _write_status(
+            {
+                **st,
+                "running": False,
+                "starting": False,
+                "finished_at": _now(),
+                "ok": False,
+                "exit_code": -2,
+                "error": "Automation stopped by user.",
+                "started_at": started_at,
+            }
+        )
+
+    return {
+        "ok": True,
+        "stopped": True,
+        "message": "Automation stop requested. Browser/process cleanup completed.",
     }

@@ -1,4 +1,4 @@
-﻿"""
+"""
 VTU AIDS - bulk upload internship diary entries to the VTU Internyet portal (JSON or Excel).
 
 JSON (generated/entries.json): wrapper {"entries": [...]} or top-level array.
@@ -27,8 +27,18 @@ from playwright.sync_api import Browser, BrowserContext, Error as PlaywrightErro
 from playwright.sync_api import Locator, Page, TimeoutError as PlaywrightTimeoutError
 from playwright.sync_api import sync_playwright
 
+try:
+    from app.automation_lock import acquire_automation_lock, release_automation_lock
+    from app.diagnostics import configure_release_logging, get_run_id
+except ModuleNotFoundError:
+    from automation_lock import acquire_automation_lock, release_automation_lock
+    from diagnostics import configure_release_logging, get_run_id
+
 LOGIN_URL = "https://vtu.internyet.in/sign-in"
 DIARY_ENTRIES_URL = "https://vtu.internyet.in/dashboard/student/diary-entries"
+STUDENT_DIARY_STEP1_URL = "https://vtu.internyet.in/dashboard/student/student-diary"
+STEP2_URL_RE = re.compile(r"create-diary-entry|edit-diary-entry", re.I)
+STEP1_URL_RE = re.compile(r"student-diary", re.I)
 
 REQUIRED_COLUMNS = (
     "Date",
@@ -68,7 +78,7 @@ MONTH_NAMES = [
     "December",
 ]
 DEFAULT_DATE_TIMEOUT_MS = 20000
-DEFAULT_CONTINUE_TIMEOUT_MS = 15000
+DEFAULT_CONTINUE_TIMEOUT_MS = 25000
 
 
 def _normalize_date_iso(value: Any) -> str:
@@ -371,6 +381,85 @@ def _fill_locator_replace(locator: Locator, text: str, timeout_ms: int) -> None:
     except PlaywrightError:
         pass
     locator.fill(text, timeout=timeout_ms)
+
+
+def _first_visible_locator(loc: Locator, *, max_scan: int = 8) -> Locator:
+    """Prefer a visible match when the portal renders duplicate/hidden controls."""
+    try:
+        n = min(loc.count(), max_scan)
+    except PlaywrightError:
+        return loc.first
+    for i in range(n):
+        candidate = loc.nth(i)
+        try:
+            if candidate.is_visible(timeout=250):
+                return candidate
+        except PlaywrightError:
+            continue
+    return loc.first
+
+
+def _fill_react_field(loc: Locator, text: str, timeout_ms: int, *, replace_existing: bool = False) -> None:
+    target = _first_visible_locator(loc)
+    target.wait_for(state="visible", timeout=min(timeout_ms, 8000))
+    # Fast path for React-controlled inputs/textareas: set value via native setter and
+    # dispatch input/change so React state updates without slow sequential typing.
+    try:
+        target.evaluate(
+            """(el, val) => {
+                const tag = (el.tagName || '').toLowerCase();
+                const proto = tag === 'textarea'
+                    ? window.HTMLTextAreaElement.prototype
+                    : window.HTMLInputElement.prototype;
+                const descriptor = Object.getOwnPropertyDescriptor(proto, 'value');
+                const setter = descriptor && descriptor.set;
+                if (setter) {
+                    setter.call(el, val);
+                } else {
+                    el.value = val;
+                }
+                el.dispatchEvent(new Event('input', { bubbles: true }));
+                el.dispatchEvent(new Event('change', { bubbles: true }));
+            }""",
+            text,
+        )
+    except PlaywrightError:
+        pass
+    if replace_existing:
+        _fill_locator_replace(target, text, timeout_ms)
+    else:
+        safe_scroll_into_view(target, min(timeout_ms, 3000))
+        target.click(timeout=min(timeout_ms, 4000))
+        target.fill(text, timeout=timeout_ms)
+    try:
+        current = (target.input_value(timeout=1500) or "").strip()
+    except PlaywrightError:
+        current = ""
+    if text.strip() and not current:
+        try:
+            current = str(target.evaluate("el => (el.value || '').trim()")).strip()
+        except PlaywrightError:
+            current = ""
+    if text.strip() and not current:
+        _fill_locator_replace(target, text, timeout_ms)
+        try:
+            current = (target.input_value(timeout=1500) or "").strip()
+        except PlaywrightError:
+            current = ""
+    if text.strip() and not current:
+        try:
+            target.press_sequentially(text, delay=12)
+        except PlaywrightError:
+            pass
+
+
+def _textarea_in_form_item(page: Page, label_regex: str) -> Locator:
+    """Portal v1.0.6 nests textareas under data-slot=form-item (not label's direct parent)."""
+    return (
+        page.locator("div[data-slot='form-item']")
+        .filter(has=page.locator("label").filter(has_text=re.compile(label_regex, re.I)))
+        .locator("textarea")
+    )
 
 
 def _find_active_calendar(page: Page, timeout_ms: int) -> Locator:
@@ -878,52 +967,300 @@ def _click_day_and_commit(
         )
 
 
-def select_internship_option(page: Page, internship_display: str, timeout_ms: int) -> None:
-    """Step 1: open internship picker and choose option text."""
+def _wait_for_internship_picker_ready(page: Page, timeout_ms: int) -> Locator:
+    trigger = (
+        page.locator("button[role='combobox']").filter(has_text=re.compile("internship", re.I))
+        .or_(page.get_by_role("combobox"))
+        .or_(page.locator("#internship_id"))
+    ).first
+    trigger.wait_for(state="visible", timeout=timeout_ms)
+    return trigger
+
+
+def _wait_for_picker_options(page: Page, timeout_ms: int) -> tuple[bool, bool]:
+    """Return tuple(has_options, saw_no_options) after bounded wait."""
+    deadline = time.perf_counter() + (timeout_ms / 1000.0)
+    while time.perf_counter() < deadline:
+        try:
+            no_options = page.locator("text=No options available")
+            if no_options.count() > 0 and no_options.first.is_visible(timeout=200):
+                LOGGER.debug("Internship picker: visible 'No options available' state detected.")
+                return False, True
+        except PlaywrightError:
+            pass
+        try:
+            options = page.get_by_role("option")
+            if options.count() > 0 and options.first.is_visible(timeout=200):
+                LOGGER.debug("Internship picker: role=option choices became visible.")
+                return True, False
+        except PlaywrightError:
+            pass
+        # Fallback for non-role based command palettes.
+        try:
+            list_items = page.locator("[role='listbox'] [role='option'], [cmdk-item], li[role='option']")
+            if list_items.count() > 0 and list_items.first.is_visible(timeout=200):
+                LOGGER.debug("Internship picker: fallback list item choices became visible.")
+                return True, False
+        except PlaywrightError:
+            pass
+        page.wait_for_timeout(120)
+    return False, False
+
+
+def _try_select_internship_by_option_click(page: Page, want: str, timeout_ms: int) -> bool:
+    candidates = (
+        page.get_by_role("option", name=re.compile(rf"^{re.escape(want)}$", re.I)),
+        page.get_by_role("option", name=re.compile(re.escape(want), re.I)),
+        page.locator("[role='listbox'] [role='option']").filter(has_text=re.compile(re.escape(want), re.I)),
+        page.locator("[cmdk-item]").filter(has_text=re.compile(re.escape(want), re.I)),
+    )
+    for cand in candidates:
+        try:
+            if cand.count() == 0:
+                continue
+            opt = cand.first
+            safe_scroll_into_view(opt, min(timeout_ms, 2500))
+            if opt.is_visible(timeout=min(timeout_ms, 1500)):
+                opt.click(timeout=min(timeout_ms, 2500))
+                LOGGER.debug("Internship picker: selected by option click.")
+                return True
+        except PlaywrightError:
+            continue
+    return False
+
+
+def _try_select_internship_by_keyboard(page: Page, want: str) -> bool:
+    try:
+        page.keyboard.press("Control+A")
+    except PlaywrightError:
+        pass
+    try:
+        page.keyboard.type(want, delay=35)
+        page.wait_for_timeout(250)
+        page.keyboard.press("ArrowDown")
+        page.keyboard.press("Enter")
+        LOGGER.debug("Internship picker: attempted keyboard selection.")
+        return True
+    except PlaywrightError:
+        return False
+
+
+def _try_select_internship_native_select(page: Page, want: str, timeout_ms: int) -> bool:
+    """Fallback for portal builds that expose a native <select id='internship_id'>."""
+    select_locators = (
+        page.locator("select#internship_id"),
+        page.locator("select[name*='internship' i]"),
+    )
+    for sel in select_locators:
+        try:
+            if sel.count() == 0:
+                continue
+            control = sel.first
+            control.wait_for(state="visible", timeout=min(timeout_ms, 2500))
+            # Prefer exact label to avoid partial mismatches.
+            control.select_option(label=want, timeout=min(timeout_ms, 3000))
+            LOGGER.debug("Internship picker: selected through native <select> label fallback.")
+            return True
+        except PlaywrightError:
+            try:
+                control.select_option(value=want, timeout=min(timeout_ms, 2500))
+                LOGGER.debug("Internship picker: selected through native <select> value fallback.")
+                return True
+            except PlaywrightError:
+                continue
+    return False
+
+
+def _selected_internship_matches(page: Page, internship_display: str) -> bool:
+    want = internship_display.strip().lower()
+    if not want:
+        return False
+    trigger = (
+        page.locator("button[role='combobox']").filter(has_text=re.compile("internship", re.I))
+        .or_(page.get_by_role("combobox"))
+        .or_(page.locator("#internship_id"))
+    ).first
+    observed_values: list[str] = []
+    try:
+        observed_values.append(trigger.inner_text(timeout=600).strip())
+    except PlaywrightError:
+        pass
+    try:
+        observed_values.append(trigger.get_attribute("value", timeout=400) or "")
+    except PlaywrightError:
+        pass
+    # Hidden input/select fallback on some portal builds.
+    for sel in ("#internship_id", "input[name*='internship' i]", "select[name*='internship' i]"):
+        try:
+            loc = page.locator(sel).first
+            if loc.count() == 0:
+                continue
+            val = (loc.input_value(timeout=400) or "").strip()
+            if val:
+                observed_values.append(val)
+            txt = (loc.text_content(timeout=300) or "").strip()
+            if txt:
+                observed_values.append(txt)
+        except PlaywrightError:
+            continue
+    for raw in observed_values:
+        observed = " ".join(raw.split()).lower()
+        if observed and want in observed:
+            return True
+    return False
+
+
+def _collect_internship_observed_values(page: Page) -> list[str]:
+    """Best-effort debug snapshot of currently selected/visible internship value."""
+    values: list[str] = []
+    trigger = (
+        page.locator("button[role='combobox']").filter(has_text=re.compile("internship", re.I))
+        .or_(page.get_by_role("combobox"))
+        .or_(page.locator("#internship_id"))
+    ).first
+    try:
+        txt = (trigger.inner_text(timeout=700) or "").strip()
+        if txt:
+            values.append(txt)
+    except PlaywrightError:
+        pass
+    for sel in ("#internship_id", "input[name*='internship' i]", "select[name*='internship' i]"):
+        try:
+            loc = page.locator(sel).first
+            if loc.count() == 0:
+                continue
+            iv = (loc.input_value(timeout=400) or "").strip()
+            if iv:
+                values.append(iv)
+            tc = (loc.text_content(timeout=400) or "").strip()
+            if tc:
+                values.append(tc)
+        except PlaywrightError:
+            continue
+    # Preserve order; dedupe cheap.
+    seen: set[str] = set()
+    out: list[str] = []
+    for item in values:
+        key = item.strip().lower()
+        if key and key not in seen:
+            seen.add(key)
+            out.append(item)
+    return out
+
+
+def select_internship_option(
+    page: Page,
+    internship_display: str,
+    timeout_ms: int,
+    *,
+    attempt: int | None = None,
+    row_no: int | None = None,
+) -> None:
+    """Step 1: open internship picker and choose option text with retries and verification."""
     try:
         if page.get_by_text("Important Notice").is_visible():
             page.get_by_role("button", name=re.compile(r"I Understand", re.I)).first.click()
     except Exception:
         pass
 
-    trig = (
-        page.locator("button[role='combobox']").filter(has_text=re.compile("internship", re.I))
-        .or_(page.get_by_role("combobox"))
-        .or_(page.locator("#internship_id"))
-    ).first
-    trig.click(timeout=timeout_ms)
-    page.wait_for_timeout(1000)
-    
-    no_options = page.locator("text=No options available")
-    if no_options.count() > 0 and no_options.first.is_visible():
-        LOGGER.warning("Internship dropdown says 'No options available'. Reloading page...")
-        page.reload(wait_until="domcontentloaded", timeout=timeout_ms)
-        page.wait_for_timeout(2000)
-        
-        if "sign-in" in page.url or "login" in page.url:
-            raise RuntimeError("Reloading page redirected to sign-in. Session may have expired.")
-        
-        try:
-            if page.get_by_text("Important Notice").is_visible(timeout=2000):
-                page.get_by_role("button", name=re.compile(r"I Understand", re.I)).first.click()
-        except Exception:
-            pass
-            
-        trig = (
-            page.locator("button[role='combobox']").filter(has_text=re.compile("internship", re.I))
-            .or_(page.get_by_role("combobox"))
-            .or_(page.locator("#internship_id"))
-        ).first
-        trig.click(timeout=timeout_ms)
-        page.wait_for_timeout(1000)
-    
     want = internship_display.strip()
-    # Use keyboard to filter and select
-    page.keyboard.type(want, delay=50)
-    page.wait_for_timeout(500)
-    page.keyboard.press("ArrowDown")
-    page.keyboard.press("Enter")
-    page.wait_for_timeout(300)
+    if not want:
+        raise RuntimeError("Internship value is empty; cannot select internship.")
+
+    ctx = []
+    if row_no is not None:
+        ctx.append(f"row={row_no}")
+    if attempt is not None:
+        ctx.append(f"attempt={attempt}")
+    ctx_label = f" ({', '.join(ctx)})" if ctx else ""
+
+    max_select_attempts = 3
+    for select_attempt in range(1, max_select_attempts + 1):
+        LOGGER.info(
+            "Internship select%s: try %d/%d (target='%s')",
+            ctx_label,
+            select_attempt,
+            max_select_attempts,
+            want[:80],
+        )
+
+        trigger = _wait_for_internship_picker_ready(page, min(timeout_ms, 15000))
+        safe_scroll_into_view(trigger, min(timeout_ms, 2500))
+        trigger.click(timeout=min(timeout_ms, 6000))
+
+        has_options, saw_no_options = _wait_for_picker_options(page, min(timeout_ms, 9000))
+        LOGGER.debug(
+            "Internship select%s: options_state has_options=%s saw_no_options=%s",
+            ctx_label,
+            has_options,
+            saw_no_options,
+        )
+        if saw_no_options:
+            LOGGER.warning(
+                "Internship select%s: portal returned 'No options available' on try %d.",
+                ctx_label,
+                select_attempt,
+            )
+            if select_attempt < max_select_attempts:
+                page.reload(wait_until="domcontentloaded", timeout=timeout_ms)
+                page.wait_for_timeout(600 + (select_attempt * 300))
+                continue
+            raise RuntimeError("Internship picker has no options available after retries.")
+
+        selected = False
+        if has_options:
+            selected = _try_select_internship_by_option_click(page, want, timeout_ms)
+            if not selected:
+                selected = _try_select_internship_by_keyboard(page, want)
+            if not selected:
+                selected = _try_select_internship_native_select(page, want, timeout_ms)
+        else:
+            # Options might be lazily loaded after typing.
+            selected = _try_select_internship_by_keyboard(page, want)
+            page.wait_for_timeout(200)
+            if not selected:
+                selected = _try_select_internship_by_option_click(page, want, timeout_ms)
+            if not selected:
+                selected = _try_select_internship_native_select(page, want, timeout_ms)
+
+        page.wait_for_timeout(180)
+        if selected and _selected_internship_matches(page, want):
+            LOGGER.info(
+                "Internship select%s: verified selected on try %d.",
+                ctx_label,
+                select_attempt,
+            )
+            return
+
+        LOGGER.warning(
+            "Internship select%s: selection not verified on try %d; retrying.",
+            ctx_label,
+            select_attempt,
+        )
+        observed_values = _collect_internship_observed_values(page)
+        if observed_values:
+            LOGGER.debug(
+                "Internship select%s: observed values after failed verification: %s",
+                ctx_label,
+                " | ".join(observed_values[:5]),
+            )
+        # Close dropdown if still open before retry (Escape can dismiss entry form on step 2).
+        if not _on_step2_page(page):
+            try:
+                page.keyboard.press("Escape")
+            except PlaywrightError:
+                pass
+        else:
+            try:
+                page.keyboard.press("Tab")
+            except PlaywrightError:
+                pass
+        page.wait_for_timeout(250 + (select_attempt * 150))
+
+    observed = " | ".join(_collect_internship_observed_values(page)[:3]).strip()
+    raise RuntimeError(
+        f"Could not reliably select internship '{want}'. Last observed picker value='{observed or 'empty'}'."
+    )
 
 
 def set_diary_date_step1(page: Page, iso_date: str, timeout_ms: int, date_timeout_ms: int) -> None:
@@ -935,6 +1272,8 @@ def set_diary_date_step1(page: Page, iso_date: str, timeout_ms: int, date_timeou
     - Click day via button.rdp-day_button / data-day (normal click, not force).
     - Wait until trigger text leaves 'Pick a Date' (proves onSelect committed).
     """
+    if get_current_diary_date_value(page, target_iso=iso_date) == iso_date:
+        return
     if _try_direct_date_input(page, iso_date, timeout_ms):
         if _wait_for_diary_date_committed(page, iso_date, min(date_timeout_ms, 4000)):
             return
@@ -982,41 +1321,48 @@ def step1_continue(page: Page, timeout_ms: int, continue_timeout_ms: int) -> Non
             if attempt == 3:
                 raise
         page.wait_for_timeout(250)
-        step2_fields = (
-            page.get_by_label(re.compile(r"work\s*summary", re.I)).first,
-            page.get_by_label(re.compile(r"hours\s*worked", re.I)).first,
-            page.get_by_role("button", name=re.compile(r"^\s*save\s*$", re.I)).first,
-        )
-        transitioned = page.url != before_url
-        for field in step2_fields:
-            try:
-                if field.is_visible(timeout=min(continue_timeout_ms, 1000)):
-                    transitioned = True
-                    break
-            except PlaywrightError:
-                continue
-        if transitioned:
+        if STEP2_URL_RE.search(page.url or ""):
+            return
+        try:
+            desc = page.locator('textarea[name="description"]')
+            if desc.count() > 0 and _first_visible_locator(desc).is_visible(timeout=1000):
+                return
+        except PlaywrightError:
+            pass
+        if page.url != before_url:
             return
     raise RuntimeError("Continue click did not transition to step 2.")
 
 
 def _wait_for_step2_form(page: Page, timeout_ms: int) -> None:
     """Wait until internship entry form (step 2) is rendered after Continue."""
-    candidates = (
-        page.get_by_placeholder(re.compile(r"Briefly describe", re.I)),
-        page.get_by_label(re.compile(r"work\s*summary", re.I)),
-        page.get_by_label(re.compile(r"hours\s*worked", re.I)),
-    )
+    if _step2_form_visible(page):
+        return
     deadline = time.perf_counter() + (timeout_ms / 1000.0)
     while time.perf_counter() < deadline:
-        for loc in candidates:
-            try:
-                if loc.count() > 0 and loc.first.is_visible():
-                    return
-            except PlaywrightError:
-                continue
+        if _step2_form_visible(page):
+            return
         page.wait_for_timeout(200)
     raise RuntimeError("Step 2 form did not appear after Continue.")
+
+
+def _step2_form_visible(page: Page) -> bool:
+    """Best-effort step-2 marker independent of URL updates."""
+    candidates = (
+        page.locator('textarea[name="description"]'),
+        page.get_by_placeholder(re.compile(r"Briefly describe", re.I)),
+        page.get_by_label(re.compile(r"work\s*summary", re.I)),
+        page.locator('input[name="hours"]'),
+        page.get_by_label(re.compile(r"hours\s*worked", re.I)),
+        page.locator('textarea[name="learnings"]'),
+    )
+    for loc in candidates:
+        try:
+            if loc.count() > 0 and loc.first.is_visible(timeout=400):
+                return True
+        except PlaywrightError:
+            continue
+    return False
 
 
 def fill_textarea_by_placeholders(
@@ -1027,12 +1373,22 @@ def fill_textarea_by_placeholders(
     timeout_ms: int,
     *,
     replace_existing: bool = False,
+    field_name: str | None = None,
 ) -> None:
     locators: list[Locator] = []
+    if field_name:
+        locators.append(page.locator(f'textarea[name="{field_name}"]'))
+        locators.append(page.locator(f'textarea#{field_name}'))
     for pr in placeholder_regexes:
         locators.append(page.get_by_placeholder(re.compile(pr, re.I)))
     for lr in label_regexes:
         locators.append(page.get_by_label(re.compile(lr, re.I)))
+        locators.append(_textarea_in_form_item(page, lr))
+        locators.append(
+            page.locator("label")
+            .filter(has_text=re.compile(lr, re.I))
+            .locator("xpath=ancestor::div[contains(@data-slot,'form-item')][1]//textarea")
+        )
 
     if not locators:
         raise PlaywrightError("No locators provided")
@@ -1043,13 +1399,7 @@ def fill_textarea_by_placeholders(
             try:
                 if loc.count() == 0:
                     continue
-                target = loc.first
-                target.wait_for(state="visible", timeout=min(timeout_ms, 3000))
-                if replace_existing:
-                    _fill_locator_replace(target, text, timeout_ms)
-                else:
-                    safe_scroll_into_view(target, min(timeout_ms, 3000))
-                    target.fill(text, timeout=timeout_ms)
+                _fill_react_field(loc, text, timeout_ms, replace_existing=replace_existing)
                 return
             except Exception as e:
                 last_error = e
@@ -1060,21 +1410,26 @@ def fill_textarea_by_placeholders(
 
 
 def fill_hours_worked(page: Page, hours_str: str, timeout_ms: int, *, replace_existing: bool = False) -> None:
-    loc = page.get_by_label(re.compile(r"hours\s*worked", re.I)).or_(
-        page.get_by_placeholder(re.compile(r"6\.5|hours", re.I))
+    scope = _step2_form_scope(page)
+    loc = scope.locator('input[name="hours"]').or_(
+        scope.get_by_label(re.compile(r"hours\s*worked", re.I))
+    ).or_(
+        scope.get_by_placeholder(re.compile(r"6\.5|hours", re.I))
+    ).or_(
+        scope.locator("div[data-slot='form-item']")
+        .filter(has=scope.locator("label").filter(has_text=re.compile(r"hours\s*worked", re.I)))
+        .locator("input")
+        .or_(
+            scope.locator("label")
+            .filter(has_text=re.compile(r"hours\s*worked", re.I))
+            .locator("xpath=ancestor::div[contains(@data-slot,'form-item')][1]//input")
+        )
     )
-    inp = loc.first
-    safe_scroll_into_view(inp, timeout_ms)
-    
-    # Clean the input to only contain digits and a decimal point (e.g. "8 hrs" -> "8")
     cleaned_hours = re.sub(r"[^\d.]", "", str(hours_str))
     if not cleaned_hours:
-        cleaned_hours = "8" # Safe fallback
-        
-    if replace_existing:
-        _fill_locator_replace(inp, cleaned_hours, timeout_ms)
-    else:
-        inp.fill(cleaned_hours, timeout=timeout_ms)
+        cleaned_hours = "8"
+    _fill_react_field(loc, cleaned_hours, timeout_ms, replace_existing=replace_existing)
+    _safe_blur_in_form(page, timeout_ms)
 
 
 def clear_skill_tags(page: Page, timeout_ms: int) -> None:
@@ -1087,13 +1442,14 @@ def clear_skill_tags(page: Page, timeout_ms: int) -> None:
     except PlaywrightError:
         pass
 
+    scope = _step2_form_scope(page)
     # Attempt 2: Repeatedly press Backspace in the input field to delete tags one by one
     try:
         trig = (
-            page.get_by_placeholder(re.compile(r"add skills|select", re.I))
-            .or_(page.get_by_label(re.compile(r"skills\s*used", re.I)))
-            .or_(page.locator("input[id*='react-select']"))
-            .or_(page.get_by_role("combobox", name=re.compile(r"skills", re.I)))
+            scope.get_by_placeholder(re.compile(r"add skills|select", re.I))
+            .or_(scope.get_by_label(re.compile(r"skills\s*used", re.I)))
+            .or_(scope.locator("input[id*='react-select']"))
+            .or_(scope.get_by_role("combobox", name=re.compile(r"skills", re.I)))
         ).first
         
         if trig.is_visible(timeout=1000):
@@ -1127,18 +1483,48 @@ def clear_skill_tags(page: Page, timeout_ms: int) -> None:
             break
 
 
+def _parse_skills_list(skills_csv: str) -> list[str]:
+    """Parse SkillsUsed without breaking comma-containing skill names."""
+    text = skills_csv.strip()
+    if not text:
+        return []
+    if ";" in text:
+        return [p.strip() for p in text.split(";") if p.strip()]
+    if "/" in text and "," not in text:
+        return [p.strip() for p in text.split("/") if p.strip()]
+    if "," not in text:
+        return [text]
+    parts = [p.strip() for p in text.split(",") if p.strip()]
+    if len(parts) <= 1:
+        return [text]
+    if len(parts) >= 2 and any(len(p.split()) > 3 for p in parts):
+        return parts
+    # Multiple short tags like "Python, IoT" — split; comma-heavy phrases stay as one skill.
+    if all(len(p.split()) <= 3 for p in parts):
+        if len(parts) >= 2 and all(len(p.split()) >= 3 for p in parts):
+            return [text]
+        return parts
+    return [text]
+
+
 def add_skills(page: Page, skills_csv: str, timeout_ms: int, *, replace_existing: bool = False) -> None:
-    raw = [s.strip() for s in re.split(r"[,;/]", skills_csv) if s.strip()]
+    raw = _parse_skills_list(skills_csv)
     if not raw:
         raise ValueError("No skills parsed from SkillsUsed")
 
-    # Define a helper function to get the latest trigger locator from the DOM
+    scope = _step2_form_scope(page)
+
     def get_skills_trigger() -> Locator:
         return (
-            page.get_by_placeholder(re.compile(r"add skills|select", re.I))
-            .or_(page.get_by_label(re.compile(r"skills\s*used", re.I)))
-            .or_(page.locator("input[id*='react-select']"))
-            .or_(page.get_by_role("combobox", name=re.compile(r"skills", re.I)))
+            scope.get_by_placeholder(re.compile(r"add skills|select", re.I))
+            .or_(scope.get_by_label(re.compile(r"skills\s*used", re.I)))
+            .or_(scope.locator("input[id*='react-select']"))
+            .or_(scope.get_by_role("combobox", name=re.compile(r"skills", re.I)))
+            .or_(
+                scope.locator("div[data-slot='form-item']")
+                .filter(has=scope.locator("label").filter(has_text=re.compile(r"skills\s*used", re.I)))
+                .locator("input")
+            )
         ).first
 
     get_skills_trigger().wait_for(state="visible", timeout=timeout_ms)
@@ -1146,21 +1532,23 @@ def add_skills(page: Page, skills_csv: str, timeout_ms: int, *, replace_existing
         clear_skill_tags(page, timeout_ms)
 
     for skill in raw:
-        # Dynamic re-query ensures we never use a detached DOM element after a React re-render
+        if not _on_step2_page(page):
+            raise RuntimeError(
+                f"Left step-2 form before adding skill {skill!r} (now at {page.url})."
+            )
         trig = get_skills_trigger()
         safe_scroll_into_view(trig, timeout_ms)
         trig.click(timeout=timeout_ms)
         trig.fill(skill)
         page.wait_for_timeout(300)
-        # Prefer picking first suggestion
         sug = page.get_by_role("option", name=re.compile(re.escape(skill), re.I)).first
         try:
             sug.wait_for(state="visible", timeout=2000)
             sug.click(timeout=timeout_ms)
         except PlaywrightTimeoutError:
             page.keyboard.press("Enter")
-        page.keyboard.press("Escape")
-        page.wait_for_timeout(100)
+        _safe_blur_in_form(page, timeout_ms)
+        page.wait_for_timeout(150)
 
 
 def _row_text_matches_date(text: str, iso_date: str) -> bool:
@@ -1220,6 +1608,19 @@ def _wait_for_diary_list(page: Page, timeout_ms: int) -> None:
 def _find_portal_entry_row(page: Page, iso_date: str, timeout_ms: int) -> Locator | None:
     """Find a table/list row on the diary page that matches the target date."""
     _wait_for_diary_list(page, timeout_ms)
+    # Fast path: most portal rows include the ISO date directly.
+    quick_candidates: list[Locator] = [
+        page.locator("table tbody tr", has_text=re.compile(re.escape(iso_date), re.I)),
+        page.locator("[data-slot='table-row']", has_text=re.compile(re.escape(iso_date), re.I)),
+        page.get_by_role("row", name=re.compile(re.escape(iso_date), re.I)),
+    ]
+    for rows in quick_candidates:
+        try:
+            if rows.count() > 0 and rows.first.is_visible(timeout=500):
+                return rows.first
+        except PlaywrightError:
+            continue
+
     candidates: list[Locator] = [
         page.locator("table tbody tr"),
         page.get_by_role("row"),
@@ -1233,9 +1634,9 @@ def _find_portal_entry_row(page: Page, iso_date: str, timeout_ms: int) -> Locato
         for i in range(count):
             row = rows.nth(i)
             try:
-                if not row.is_visible(timeout=400):
+                if not row.is_visible(timeout=250):
                     continue
-                text = row.inner_text(timeout=1200)
+                text = row.inner_text(timeout=700)
             except PlaywrightError:
                 continue
             if _row_text_matches_date(text, iso_date):
@@ -1277,23 +1678,73 @@ def _dismiss_blocking_dialogs(page: Page, timeout_ms: int) -> None:
             continue
 
 
-def _step2_form_visible(page: Page) -> bool:
-    for loc in (
-        page.get_by_label(re.compile(r"work\s*summary", re.I)).first,
-        page.get_by_placeholder(re.compile(r"Briefly describe", re.I)).first,
-        page.get_by_label(re.compile(r"hours\s*worked", re.I)).first,
-    ):
-        try:
-            if loc.is_visible(timeout=300):
-                return True
-        except PlaywrightError:
-            continue
+def _on_step1_page(page: Page) -> bool:
+    try:
+        if STEP1_URL_RE.search(page.url or ""):
+            return True
+    except PlaywrightError:
+        pass
+    try:
+        btn = page.get_by_role("button", name=re.compile(r"^\s*Continue\s*$", re.I)).first
+        return btn.is_visible(timeout=400)
+    except PlaywrightError:
+        return False
+
+
+def _on_step2_page(page: Page) -> bool:
+    # Prefer form visibility over URL-only checks; SPA route updates can lag.
+    if _step2_form_visible(page):
+        return True
+    try:
+        return STEP2_URL_RE.search(page.url or "") is not None
+    except PlaywrightError:
+        return False
+
+
+def _wait_for_step2_transition(
+    page: Page,
+    timeout_ms: int,
+    *,
+    row: dict[str, Any] | None = None,
+    attempt: int | None = None,
+) -> bool:
+    """Bounded wait for step-2 URL/form transition after Continue."""
+    started = time.perf_counter()
+    deadline = started + (timeout_ms / 1000.0)
+    while time.perf_counter() < deadline:
+        if _on_step2_page(page):
+            elapsed_ms = int((time.perf_counter() - started) * 1000)
+            if row is not None:
+                LOGGER.info(
+                    "Row %s: step2 transition observed in %dms (attempt=%s, url=%s).",
+                    row.get("_row_no"),
+                    elapsed_ms,
+                    attempt if attempt is not None else "-",
+                    page.url,
+                )
+            return True
+        page.wait_for_timeout(200)
+    elapsed_ms = int((time.perf_counter() - started) * 1000)
+    if row is not None:
+        LOGGER.warning(
+            "Row %s: step2 transition timed out after %dms (attempt=%s, url=%s).",
+            row.get("_row_no"),
+            elapsed_ms,
+            attempt if attempt is not None else "-",
+            page.url,
+        )
     return False
 
 
 def _diary_list_visible(page: Page) -> bool:
-    if _step2_form_visible(page):
+    if _on_step2_page(page) or _on_step1_page(page):
         return False
+    try:
+        if "diary-entries" in (page.url or "") and STEP2_URL_RE.search(page.url or "") is None:
+            if STEP1_URL_RE.search(page.url or "") is None:
+                return True
+    except PlaywrightError:
+        pass
     try:
         if create_entry_button(page).first.is_visible(timeout=500):
             return True
@@ -1349,11 +1800,33 @@ def _dismiss_post_save_feedback(page: Page, timeout_ms: int) -> None:
 
 
 def return_to_diary_list(page: Page, timeout_ms: int) -> None:
-    """Close edit modal/sheet after save and return to the entries table."""
+    """Return to the diary entries list after save (full-page create/edit or legacy sheet)."""
     _dismiss_post_save_feedback(page, min(timeout_ms, 3000))
 
     if _diary_list_visible(page):
         return
+
+    try:
+        if STEP2_URL_RE.search(page.url or ""):
+            LOGGER.info("Leaving step-2 page via navigation to diary list.")
+            goto_diary_entries_soft(page, min(timeout_ms, 12000))
+            try:
+                _wait_for_diary_list(page, min(timeout_ms, 8000))
+            except RuntimeError:
+                pass
+            return
+    except PlaywrightError:
+        pass
+
+    try:
+        cancel = page.get_by_role("button", name=re.compile(r"^\s*Cancel\s*$", re.I)).first
+        if cancel.is_visible(timeout=800):
+            cancel.click(timeout=min(timeout_ms, 5000))
+            page.wait_for_timeout(400)
+            if _diary_list_visible(page):
+                return
+    except PlaywrightError:
+        pass
 
     LOGGER.info("Closing entry panel and returning to diary list...")
     deadline = time.perf_counter() + (min(timeout_ms, 8000) / 1000.0)
@@ -1364,10 +1837,11 @@ def return_to_diary_list(page: Page, timeout_ms: int) -> None:
         if _try_close_edit_panel_once(page, timeout_ms):
             page.wait_for_timeout(250)
             continue
-        try:
-            page.keyboard.press("Escape")
-        except PlaywrightError:
-            pass
+        if not STEP2_URL_RE.search(page.url or ""):
+            try:
+                page.keyboard.press("Escape")
+            except PlaywrightError:
+                pass
         _dismiss_blocking_dialogs(page, timeout_ms)
         page.wait_for_timeout(200)
 
@@ -1377,17 +1851,6 @@ def return_to_diary_list(page: Page, timeout_ms: int) -> None:
         _wait_for_diary_list(page, min(timeout_ms, 8000))
     except RuntimeError:
         pass
-
-
-def _cleanup_playwright_chromium_windows() -> None:
-    """Stop headed Chromium orphans left by Playwright on Windows (ms-playwright only)."""
-    try:
-        from app.process_cleanup import cleanup_playwright_chromium
-    except ModuleNotFoundError:
-        # Direct script mode: app package may not be importable from cwd.
-        from process_cleanup import cleanup_playwright_chromium
-
-    cleanup_playwright_chromium()
 
 
 def _setup_headed_browser(browser: Browser, context: BrowserContext, page: Page) -> None:
@@ -1439,8 +1902,9 @@ def _close_browser_session(
             LOGGER.warning("Second browser close failed: %s", e)
 
     if headed:
+        # Give native window teardown a brief moment, but avoid global chromium
+        # process cleanup here. Global cleanup can terminate other active bot runs.
         time.sleep(0.25)
-        _cleanup_playwright_chromium_windows()
 
 
 def try_open_existing_entry_edit(page: Page, iso_date: str, timeout_ms: int) -> bool:
@@ -1450,13 +1914,135 @@ def try_open_existing_entry_edit(page: Page, iso_date: str, timeout_ms: int) -> 
         return False
     LOGGER.info("Portal already has entry for %s - using Edit flow.", iso_date)
     _click_edit_on_row(row, timeout_ms)
-    page.wait_for_timeout(400)
-    _dismiss_blocking_dialogs(page, timeout_ms)
+    deadline = time.perf_counter() + (min(timeout_ms, 6000) / 1000.0)
+    while time.perf_counter() < deadline:
+        try:
+            if STEP2_URL_RE.search(page.url or ""):
+                break
+        except PlaywrightError:
+            pass
+        _dismiss_blocking_dialogs(page, min(timeout_ms, 2500))
+        page.wait_for_timeout(120)
+    if not _on_step2_page(page):
+        _dismiss_blocking_dialogs(page, min(timeout_ms, 2000))
+        _wait_for_step2_form(page, min(timeout_ms, 8000))
     return True
+
+
+def _read_textarea_value(page: Page, name: str) -> str:
+    try:
+        loc = page.locator(f'textarea[name="{name}"]')
+        if loc.count() == 0:
+            return ""
+        target = _first_visible_locator(loc)
+        val = (target.input_value(timeout=2000) or "").strip()
+        if val:
+            return val
+        val = target.evaluate("el => (el.value || '').trim()")
+        return str(val).strip() if val else ""
+    except PlaywrightError:
+        return ""
+
+
+def _read_input_value(page: Page, name: str) -> str:
+    try:
+        loc = _step2_form_scope(page).locator(f'input[name="{name}"]')
+        if loc.count() == 0:
+            return ""
+        target = _first_visible_locator(loc)
+        val = (target.input_value(timeout=2000) or "").strip()
+        if val:
+            return val
+        val = target.evaluate("el => (el.value || '').trim()")
+        return str(val).strip() if val else ""
+    except PlaywrightError:
+        return ""
+
+
+def _is_edit_entry_page(page: Page) -> bool:
+    try:
+        return "edit-diary-entry" in (page.url or "")
+    except PlaywrightError:
+        return False
+
+
+def _skills_committed(page: Page) -> bool:
+    scope = _step2_form_scope(page)
+    try:
+        hidden = scope.locator('input[name="skill_ids"]')
+        if hidden.count() > 0:
+            val = (hidden.first.input_value(timeout=1000) or "").strip()
+            if val and val not in ("[]", ""):
+                return True
+    except PlaywrightError:
+        pass
+    try:
+        if scope.locator("[data-slot='badge'], .css-1p3m7a8-multiValue").count() > 0:
+            return True
+    except PlaywrightError:
+        pass
+    try:
+        if scope.get_by_role("button", name=re.compile(r"Remove", re.I)).count() > 0:
+            return True
+    except PlaywrightError:
+        pass
+    return False
+
+
+def _verify_step2_filled(page: Page, row: dict[str, Any]) -> None:
+    """Fail fast if required step-2 fields did not persist in the DOM."""
+    missing: list[str] = []
+    summary = _read_textarea_value(page, "description")
+    if not summary:
+        missing.append("work summary (description)")
+    hours = _read_input_value(page, "hours")
+    if not hours:
+        missing.append("hours worked")
+    learnings = _read_textarea_value(page, "learnings")
+    if not learnings:
+        missing.append("learnings/outcomes")
+    if not _skills_committed(page):
+        missing.append(f"skills ({row.get('SkillsUsed', '')})")
+    if missing:
+        if not _on_step2_page(page):
+            raise RuntimeError(
+                f"Step 2 form closed before verify (now at {page.url}). "
+                "Fields were not saved."
+            )
+        LOGGER.warning(
+            "Step 2 read-back: description=%r hours=%r learnings=%r skills_committed=%s url=%s",
+            summary[:80] if summary else "",
+            hours,
+            learnings[:80] if learnings else "",
+            _skills_committed(page),
+            page.url,
+        )
+        try:
+            sav = _step2_form_scope(page).get_by_role("button", name=_SAVE_BTN_RE)
+            for i in range(min(sav.count(), 6)):
+                btn = sav.nth(i)
+                if btn.is_visible(timeout=400) and btn.is_enabled():
+                    LOGGER.warning(
+                        "Read-back empty but Save is enabled; accepting fill (React controlled fields)."
+                    )
+                    return
+        except PlaywrightError:
+            pass
+        raise RuntimeError(
+            "Step 2 verification failed - empty field(s): " + ", ".join(missing)
+        )
 
 
 def fill_step2_fields(page: Page, row: dict[str, Any], timeout_ms: int, *, replace_existing: bool) -> None:
     _wait_for_step2_form(page, timeout_ms)
+    if not _on_step2_page(page):
+        raise RuntimeError(
+            f"Expected step-2 create/edit page before fill; current URL: {page.url}"
+        )
+    LOGGER.info("Filling step 2 on %s", page.url)
+    _first_visible_locator(page.locator('textarea[name="description"]')).wait_for(
+        state="visible", timeout=min(timeout_ms, 15000)
+    )
     fill_textarea_by_placeholders(
         page,
         placeholder_regexes=[r"Briefly describe", r"work you did today"],
@@ -1464,8 +2050,11 @@ def fill_step2_fields(page: Page, row: dict[str, Any], timeout_ms: int, *, repla
         text=row["WorkSummary"],
         timeout_ms=timeout_ms,
         replace_existing=replace_existing,
+        field_name="description",
     )
+    _assert_still_on_step2(page, "work summary")
     fill_hours_worked(page, row["HoursWorked"], timeout_ms, replace_existing=replace_existing)
+    _assert_still_on_step2(page, "hours worked")
     links = row.get("ReferenceLinks", "")
     blockers = row.get("BlockersRisks", "")
     if links:
@@ -1476,6 +2065,7 @@ def fill_step2_fields(page: Page, row: dict[str, Any], timeout_ms: int, *, repla
             text=links,
             timeout_ms=timeout_ms,
             replace_existing=replace_existing,
+            field_name="links",
         )
     fill_textarea_by_placeholders(
         page,
@@ -1484,6 +2074,7 @@ def fill_step2_fields(page: Page, row: dict[str, Any], timeout_ms: int, *, repla
         text=row["LearningOutcomes"],
         timeout_ms=timeout_ms,
         replace_existing=replace_existing,
+        field_name="learnings",
     )
     if blockers:
         fill_textarea_by_placeholders(
@@ -1493,8 +2084,162 @@ def fill_step2_fields(page: Page, row: dict[str, Any], timeout_ms: int, *, repla
             text=blockers,
             timeout_ms=timeout_ms,
             replace_existing=replace_existing,
+            field_name="blockers",
         )
     add_skills(page, row["SkillsUsed"], timeout_ms, replace_existing=replace_existing)
+    _assert_still_on_step2(page, "skills")
+    fill_hours_worked(page, row["HoursWorked"], timeout_ms, replace_existing=True)
+    _assert_still_on_step2(page, "hours re-fill")
+    _nudge_form_validation(page)
+    _assert_still_on_step2(page, "validation nudge")
+    _verify_step2_filled(page, row)
+
+
+_SAVE_BTN_RE = re.compile(r"^\s*(?:Save(?:\s+Diary\s+Entry)?|Update(?:\s+Entry)?)\s*$", re.I)
+
+
+def _scroll_entry_form_to_bottom(page: Page) -> None:
+    """Scroll full-page step-2 form so the Save control at the bottom is reachable."""
+    try:
+        main = page.locator("main").last
+        if main.count() > 0:
+            main.evaluate("el => { el.scrollTop = el.scrollHeight; }", timeout=2000)
+    except PlaywrightError:
+        pass
+    try:
+        page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+    except PlaywrightError:
+        pass
+    page.wait_for_timeout(350)
+
+
+def _step2_form_scope(page: Page) -> Locator:
+    """Limit interactions to the entry form (avoid sidebar links receiving Tab focus)."""
+    for sel in ("main form", "main", "[data-slot='sheet-content']"):
+        loc = page.locator(sel)
+        if loc.count() > 0:
+            return loc.first
+    return page.locator("body")
+
+
+def _safe_blur_in_form(page: Page, timeout_ms: int) -> None:
+    """Move focus to a stable in-form field (never Tab — it can activate sidebar links)."""
+    scope = _step2_form_scope(page)
+    for sel in (
+        'textarea[name="learnings"]',
+        'textarea[name="description"]',
+        'input[name="hours"]',
+    ):
+        try:
+            field = _first_visible_locator(scope.locator(sel))
+            field.focus(timeout=min(timeout_ms, 3000))
+            return
+        except PlaywrightError:
+            continue
+
+
+def _assert_still_on_step2(page: Page, step: str) -> None:
+    if not _on_step2_page(page):
+        raise RuntimeError(
+            f"Left step-2 form during {step} (now at {page.url}). "
+            "The portal may have closed the form or navigated away."
+        )
+
+
+def _nudge_form_validation(page: Page) -> None:
+    """Blur/focus fields so React-controlled forms enable Save (do not Tab — hits sidebar)."""
+    if not _on_step2_page(page):
+        return
+    try:
+        scope = _step2_form_scope(page)
+        fields = scope.locator(
+            "textarea:visible, input:visible:not([type='hidden']):not([readonly])"
+        )
+        for i in range(min(fields.count(), 6)):
+            try:
+                field = fields.nth(i)
+                if field.is_visible(timeout=150):
+                    field.focus()
+                    page.wait_for_timeout(80)
+            except PlaywrightError:
+                continue
+        _safe_blur_in_form(page, 2000)
+    except PlaywrightError:
+        pass
+    page.wait_for_timeout(400)
+
+
+def _button_label(btn: Locator) -> str:
+    try:
+        text = btn.evaluate("el => (el.textContent || el.value || '').trim()")
+        if isinstance(text, str) and text.strip():
+            return text.strip()
+    except PlaywrightError:
+        pass
+    try:
+        return (btn.inner_text(timeout=400) or "").strip()
+    except PlaywrightError:
+        return ""
+
+
+def _log_save_button_candidates(page: Page) -> None:
+    try:
+        buttons = page.get_by_role("button", name=_SAVE_BTN_RE)
+        for i in range(min(buttons.count(), 8)):
+            btn = buttons.nth(i)
+            try:
+                LOGGER.warning(
+                    "Save candidate %r visible=%s enabled=%s",
+                    _button_label(btn)[:80],
+                    btn.is_visible(timeout=200),
+                    btn.is_enabled(),
+                )
+            except PlaywrightError:
+                continue
+    except PlaywrightError:
+        pass
+
+
+def _resolve_save_entry_button(page: Page, timeout_ms: int) -> Locator:
+    """Find the portal Save button (exact label 'Save' on step-2 full page)."""
+    _scroll_entry_form_to_bottom(page)
+    sav = _step2_form_scope(page).get_by_role("button", name=_SAVE_BTN_RE)
+    deadline = time.perf_counter() + (timeout_ms / 1000.0)
+    while time.perf_counter() < deadline:
+        for i in range(sav.count()):
+            btn = sav.nth(i)
+            try:
+                if btn.is_visible(timeout=300):
+                    return btn
+            except PlaywrightError:
+                continue
+        page.wait_for_timeout(250)
+    _log_save_button_candidates(page)
+    raise RuntimeError(
+        "Could not find Save button. Scroll the form or check the portal layout."
+    )
+
+
+def _log_portal_validation_errors(page: Page) -> None:
+    """Log visible form validation messages (helps debug empty-field saves)."""
+    patterns = (
+        "[role='alert']",
+        ".text-destructive",
+        "p.text-sm.text-destructive",
+        "span.text-destructive",
+    )
+    messages: list[str] = []
+    for sel in patterns:
+        try:
+            loc = page.locator(sel)
+            for i in range(min(loc.count(), 8)):
+                txt = (loc.nth(i).inner_text(timeout=300) or "").strip()
+                if txt and txt not in messages:
+                    messages.append(txt)
+        except PlaywrightError:
+            continue
+    if messages:
+        LOGGER.warning("Portal validation visible: %s", " | ".join(messages[:5]))
 
 
 def save_diary_entry_form(
@@ -1508,14 +2253,31 @@ def save_diary_entry_form(
     from_edit: bool = False,
     is_last_row: bool = False,
 ) -> None:
-    sav = (
-        page.get_by_role("button", name=re.compile(r"^\s*save\s*(?:entry|diary)?\s*$", re.I))
-        .or_(page.get_by_role("button", name=re.compile(r"^\s*save\s*$", re.I)))
-        .or_(page.get_by_role("button", name=re.compile(r"submit", re.I)))
-        .or_(page.locator("button[type='submit']"))
-        .or_(page.locator("button:has-text('Save')"))
-    ).first
-    safe_scroll_into_view(sav, timeout_ms)
+    click_timeout = min(timeout_ms, 20000)
+    _nudge_form_validation(page)
+    try:
+        sav = _resolve_save_entry_button(page, click_timeout)
+    except RuntimeError:
+        _log_portal_validation_errors(page)
+        raise
+    if not sav.is_enabled():
+        _nudge_form_validation(page)
+        _scroll_entry_form_to_bottom(page)
+        enabled_deadline = time.perf_counter() + 10.0
+        while time.perf_counter() < enabled_deadline:
+            try:
+                if sav.is_enabled():
+                    break
+            except PlaywrightError:
+                pass
+            page.wait_for_timeout(250)
+        else:
+            _log_portal_validation_errors(page)
+            _log_save_button_candidates(page)
+            raise RuntimeError(
+                "Save button stayed disabled. Check required fields (work summary, hours, skills)."
+            )
+    safe_scroll_into_view(sav, min(click_timeout, 5000))
     emit_ack(row, attempt, "save_clicked", "ok")
 
     def _finish_row_success(*, reason: str = "") -> None:
@@ -1530,7 +2292,7 @@ def save_diary_entry_form(
         LOGGER.info("Row %s: saved successfully.", row["_row_no"])
 
     if from_edit:
-        sav.click(timeout=timeout_ms)
+        sav.click(timeout=click_timeout)
         page.wait_for_timeout(600)
         _dismiss_post_save_feedback(page, min(timeout_ms, 2000))
         if is_last_row:
@@ -1544,10 +2306,11 @@ def save_diary_entry_form(
         return_to_diary_list(page, min(timeout_ms, 12000))
     else:
         try:
-            with page.expect_navigation(timeout=min(timeout_ms, 15000)):
-                sav.click(timeout=timeout_ms)
+            with page.expect_navigation(timeout=min(click_timeout, 15000)):
+                sav.click(timeout=click_timeout)
         except PlaywrightTimeoutError:
-            sav.click(timeout=timeout_ms)
+            sav.click(timeout=click_timeout)
+            _log_portal_validation_errors(page)
         page.wait_for_timeout(500)
         _dismiss_post_save_feedback(page, min(timeout_ms, 2000))
         if is_last_row:
@@ -1581,18 +2344,49 @@ def run_create_new_entry_flow(
     *,
     is_last_row: bool = False,
 ) -> None:
+    # Guard against long hangs in existing-entry edge cases where step1 date/continue
+    # can stall before we recover into edit flow.
+    date_timeout_guarded = min(date_timeout_ms, 12000)
+    continue_timeout_guarded = min(continue_timeout_ms, 10000)
+    step2_wait_guarded = min(timeout_ms, 12000)
+
+    if try_open_existing_entry_edit(page, row["Date"], min(timeout_ms, 5000)):
+        emit_ack(row, attempt, "mode", "ok", reason="edit_existing_fast_path")
+        fill_step2_fields(page, row, timeout_ms, replace_existing=True)
+        emit_ack(row, attempt, "fill_verified", "ok")
+        save_diary_entry_form(
+            page,
+            row,
+            timeout_ms,
+            attempt,
+            emit_ack,
+            row_started,
+            from_edit=True,
+            is_last_row=is_last_row,
+        )
+        return
+
+    create_entry_button(page).first.wait_for(state="visible", timeout=min(timeout_ms, 8000))
     create_entry_button(page).first.click(timeout=timeout_ms)
-    select_internship_option(page, row["Internship"], timeout_ms)
+    page.wait_for_url("**/student-diary", timeout=timeout_ms)
+    select_internship_option(
+        page,
+        row["Internship"],
+        timeout_ms,
+        attempt=attempt,
+        row_no=row.get("_row_no"),
+    )
 
     t0 = row_started
     try:
-        set_diary_date_step1(page, row["Date"], timeout_ms, date_timeout_ms)
+        set_diary_date_step1(page, row["Date"], timeout_ms, date_timeout_guarded)
     except Exception:
         _dismiss_blocking_dialogs(page, timeout_ms)
         goto_diary_entries(page, timeout_ms)
         if try_open_existing_entry_edit(page, row["Date"], timeout_ms):
             emit_ack(row, attempt, "mode", "ok", reason="edit_after_create_date_fail")
             fill_step2_fields(page, row, timeout_ms, replace_existing=True)
+            emit_ack(row, attempt, "fill_verified", "ok")
             save_diary_entry_form(
                 page,
                 row,
@@ -1614,6 +2408,7 @@ def run_create_new_entry_flow(
         if try_open_existing_entry_edit(page, row["Date"], timeout_ms):
             emit_ack(row, attempt, "mode", "ok", reason="edit_existing_date_blocked")
             fill_step2_fields(page, row, timeout_ms, replace_existing=True)
+            emit_ack(row, attempt, "fill_verified", "ok")
             save_diary_entry_form(
                 page,
                 row,
@@ -1630,15 +2425,11 @@ def run_create_new_entry_flow(
         )
     emit_ack(row, attempt, "date_verified", "ok", reason=f"observed={observed or 'trigger_updated'}")
 
-    before_continue_url = page.url
-    try:
-        step1_continue(page, timeout_ms, continue_timeout_ms)
-    except RuntimeError:
-        _dismiss_blocking_dialogs(page, timeout_ms)
-        goto_diary_entries(page, timeout_ms)
+    if not _on_step2_page(page) and not _on_step1_page(page):
         if try_open_existing_entry_edit(page, row["Date"], timeout_ms):
-            emit_ack(row, attempt, "mode", "ok", reason="edit_after_continue_fail")
+            emit_ack(row, attempt, "mode", "ok", reason="edit_after_date_to_list")
             fill_step2_fields(page, row, timeout_ms, replace_existing=True)
+            emit_ack(row, attempt, "fill_verified", "ok")
             save_diary_entry_form(
                 page,
                 row,
@@ -1650,11 +2441,94 @@ def run_create_new_entry_flow(
                 is_last_row=is_last_row,
             )
             return
-        raise
 
-    emit_ack(row, attempt, "continue_clicked", "ok")
-    page.wait_for_load_state("domcontentloaded", timeout=timeout_ms)
-    fill_step2_fields(page, row, timeout_ms, replace_existing=False)
+    def _step2_ready_for_fill() -> bool:
+        if not _on_step2_page(page):
+            return False
+        if _is_edit_entry_page(page):
+            return True
+        observed = get_current_diary_date_value(page, target_iso=row["Date"])
+        if observed == row["Date"]:
+            return True
+        return not _trigger_shows_pick_a_date(page)
+
+    if _step2_ready_for_fill():
+        LOGGER.info(
+            "Already on step-2 page (%s); skipping Continue.",
+            "edit" if _is_edit_entry_page(page) else "create",
+        )
+        emit_ack(row, attempt, "continue_skipped", "ok", reason="already_on_step2")
+        page.wait_for_load_state("domcontentloaded", timeout=timeout_ms)
+    elif _on_step2_page(page) and _on_step1_page(page) is False:
+        goto_diary_entries(page, timeout_ms)
+        create_entry_button(page).first.click(timeout=timeout_ms)
+        page.wait_for_url("**/student-diary", timeout=timeout_ms)
+        select_internship_option(
+            page,
+            row["Internship"],
+            timeout_ms,
+            attempt=attempt,
+            row_no=row.get("_row_no"),
+        )
+        set_diary_date_step1(page, row["Date"], timeout_ms, date_timeout_guarded)
+        step1_continue(page, timeout_ms, continue_timeout_guarded)
+        emit_ack(row, attempt, "continue_clicked", "ok", reason="recovered_create_step1")
+        if not _wait_for_step2_transition(
+            page,
+            step2_wait_guarded,
+            row=row,
+            attempt=attempt,
+        ):
+            goto_diary_entries(page, timeout_ms)
+            if try_open_existing_entry_edit(page, row["Date"], min(timeout_ms, 8000)):
+                emit_ack(row, attempt, "mode", "ok", reason="edit_after_continue_url_timeout")
+            else:
+                raise RuntimeError("Continue did not reach step 2 within guarded transition budget.")
+        page.wait_for_load_state("domcontentloaded", timeout=timeout_ms)
+    elif _on_step1_page(page):
+        try:
+            step1_continue(page, timeout_ms, continue_timeout_guarded)
+        except RuntimeError:
+            _dismiss_blocking_dialogs(page, timeout_ms)
+            goto_diary_entries(page, timeout_ms)
+            if try_open_existing_entry_edit(page, row["Date"], timeout_ms):
+                emit_ack(row, attempt, "mode", "ok", reason="edit_after_continue_fail")
+                fill_step2_fields(page, row, timeout_ms, replace_existing=True)
+                emit_ack(row, attempt, "fill_verified", "ok")
+                save_diary_entry_form(
+                    page,
+                    row,
+                    timeout_ms,
+                    attempt,
+                    emit_ack,
+                    t0,
+                    from_edit=True,
+                    is_last_row=is_last_row,
+                )
+                return
+            raise
+        emit_ack(row, attempt, "continue_clicked", "ok")
+        if not _wait_for_step2_transition(
+            page,
+            step2_wait_guarded,
+            row=row,
+            attempt=attempt,
+        ):
+            goto_diary_entries(page, timeout_ms)
+            if try_open_existing_entry_edit(page, row["Date"], min(timeout_ms, 8000)):
+                emit_ack(row, attempt, "mode", "ok", reason="edit_after_continue_url_timeout")
+            else:
+                raise RuntimeError("Continue did not reach step 2 within guarded transition budget.")
+        page.wait_for_load_state("domcontentloaded", timeout=timeout_ms)
+    else:
+        raise RuntimeError(
+            f"Unexpected page after step 1 (expected student-diary or create/edit): {page.url}"
+        )
+
+    replace_fields = _is_edit_entry_page(page)
+    fill_step2_fields(page, row, timeout_ms, replace_existing=replace_fields)
+    emit_ack(row, attempt, "fill_verified", "ok")
+    LOGGER.info("Row %s: step 2 fields filled and verified.", row["_row_no"])
     save_diary_entry_form(
         page,
         row,
@@ -1662,7 +2536,7 @@ def run_create_new_entry_flow(
         attempt,
         emit_ack,
         t0,
-        from_edit=False,
+        from_edit=replace_fields,
         is_last_row=is_last_row,
     )
 
@@ -1683,11 +2557,14 @@ def create_one_entry(
     LOGGER.info("Row %s: starting entry for %s", row_no, row["Date"])
     emit_ack(row, attempt, "row_start", "ok")
 
-    goto_diary_entries(page, timeout_ms)
+    # Existing-entry detection only needs list state; avoid waiting for Create first.
+    goto_diary_entries_soft(page, min(timeout_ms, 15000))
+    _wait_for_diary_list(page, min(timeout_ms, 10000))
 
     if try_open_existing_entry_edit(page, row["Date"], timeout_ms):
         emit_ack(row, attempt, "mode", "ok", reason="edit_existing_portal_entry")
         fill_step2_fields(page, row, timeout_ms, replace_existing=True)
+        emit_ack(row, attempt, "fill_verified", "ok")
         save_diary_entry_form(
             page,
             row,
@@ -1786,6 +2663,10 @@ def _process_all_rows(
     run_id: str,
     entries_path: Path | None = None,
 ) -> int:
+    def _is_target_closed_error(exc: Exception) -> bool:
+        msg = str(exc).lower()
+        return "target page, context or browser has been closed" in msg
+
     failed = 0
     login(page, username, password, timeout_ms)
     for idx, row in enumerate(rows):
@@ -1859,6 +2740,16 @@ def _process_all_rows(
                     row_missed=True,
                 )
 
+                if _is_target_closed_error(e):
+                    LOGGER.error(
+                        "Browser session closed unexpectedly on row %s; stopping run immediately.",
+                        row["_row_no"],
+                    )
+                    # Session is invalid; retries will not recover because page/context is gone.
+                    raise RuntimeError(
+                        "Automation browser session closed unexpectedly. Please re-run automation."
+                    ) from e
+
                 if screenshot_on_error_dir:
                     path = (
                         screenshot_on_error_dir
@@ -1880,14 +2771,12 @@ def _process_all_rows(
                 else:
                     LOGGER.info("Attempting to recover session and retry...")
                     try:
-                        if "sign-in" in page.url or "login" in page.url:
+                        if "Step 2 verification failed" in str(e):
+                            goto_diary_entries(page, timeout_ms)
+                        elif "sign-in" in page.url or "login" in page.url:
                             login(page, username, password, timeout_ms)
                         else:
-                            page.goto(
-                                DIARY_ENTRIES_URL,
-                                wait_until="domcontentloaded",
-                                timeout=timeout_ms,
-                            )
+                            goto_diary_entries(page, timeout_ms)
                         page.wait_for_timeout(2000)
                     except Exception as recovery_error:
                         LOGGER.error("Recovery failed: %s", recovery_error)
@@ -1919,65 +2808,75 @@ def run(
             LOGGER.info("DRY RUN row %s: %s - %s", r["_row_no"], r["Date"], r["Internship"][:60])
         return 0
 
+    try:
+        acquire_automation_lock()
+    except RuntimeError as e:
+        LOGGER.error("%s", e)
+        return 1
+
     launch_kwargs: dict[str, Any] = {"headless": not headed, "slow_mo": slow_mo_ms}
     viewport = {"width": 1280, "height": 900}
     failed = 0
 
-    with sync_playwright() as pw:
-        if keep_browser_open and headed:
-            browser = pw.chromium.launch(**launch_kwargs)
-            context = browser.new_context(viewport=viewport)
-            page = context.new_page()
-            _setup_headed_browser(browser, context, page)
-            try:
-                failed = _process_all_rows(
-                    page,
-                    rows,
-                    username=username,
-                    password=password,
-                    timeout_ms=timeout_ms,
-                    date_timeout_ms=date_timeout_ms,
-                    continue_timeout_ms=continue_timeout_ms,
-                    skip_on_error=skip_on_error,
-                    screenshot_on_error_dir=screenshot_on_error_dir,
-                    ack_jsonl_path=ack_jsonl_path,
-                    run_id=run_id,
-                    entries_path=entries_path,
-                )
-            except Exception:
-                LOGGER.info("Run failed - closing browser.")
-                _close_browser_session(page, context, browser, headed=headed)
-                raise
-            LOGGER.info(
-                "Keeping browser open (--keep-browser-open). Close the Chromium window manually."
-            )
-        else:
-            browser = pw.chromium.launch(**launch_kwargs)
-            context = None
-            page = None
-            try:
+    try:
+        with sync_playwright() as pw:
+            if keep_browser_open and headed:
+                browser = pw.chromium.launch(**launch_kwargs)
                 context = browser.new_context(viewport=viewport)
                 page = context.new_page()
-                LOGGER.info("Browser started (headed=%s).", headed)
-                if headed:
-                    _setup_headed_browser(browser, context, page)
-                failed = _process_all_rows(
-                    page,
-                    rows,
-                    username=username,
-                    password=password,
-                    timeout_ms=timeout_ms,
-                    date_timeout_ms=date_timeout_ms,
-                    continue_timeout_ms=continue_timeout_ms,
-                    skip_on_error=skip_on_error,
-                    screenshot_on_error_dir=screenshot_on_error_dir,
-                    ack_jsonl_path=ack_jsonl_path,
-                    run_id=run_id,
-                    entries_path=entries_path,
+                _setup_headed_browser(browser, context, page)
+                try:
+                    failed = _process_all_rows(
+                        page,
+                        rows,
+                        username=username,
+                        password=password,
+                        timeout_ms=timeout_ms,
+                        date_timeout_ms=date_timeout_ms,
+                        continue_timeout_ms=continue_timeout_ms,
+                        skip_on_error=skip_on_error,
+                        screenshot_on_error_dir=screenshot_on_error_dir,
+                        ack_jsonl_path=ack_jsonl_path,
+                        run_id=run_id,
+                        entries_path=entries_path,
+                    )
+                except Exception:
+                    LOGGER.info("Run failed - closing browser.")
+                    _close_browser_session(page, context, browser, headed=headed)
+                    raise
+                LOGGER.info(
+                    "Keeping browser open (--keep-browser-open). Close the Chromium window manually."
                 )
-            finally:
-                LOGGER.info("Closing browser (no more entries to process).")
-                _close_browser_session(page, context, browser, headed=headed)
+            else:
+                browser = pw.chromium.launch(**launch_kwargs)
+                context = None
+                page = None
+                try:
+                    context = browser.new_context(viewport=viewport)
+                    page = context.new_page()
+                    LOGGER.info("Browser started (headed=%s).", headed)
+                    if headed:
+                        _setup_headed_browser(browser, context, page)
+                    failed = _process_all_rows(
+                        page,
+                        rows,
+                        username=username,
+                        password=password,
+                        timeout_ms=timeout_ms,
+                        date_timeout_ms=date_timeout_ms,
+                        continue_timeout_ms=continue_timeout_ms,
+                        skip_on_error=skip_on_error,
+                        screenshot_on_error_dir=screenshot_on_error_dir,
+                        ack_jsonl_path=ack_jsonl_path,
+                        run_id=run_id,
+                        entries_path=entries_path,
+                    )
+                finally:
+                    LOGGER.info("Closing browser (no more entries to process).")
+                    _close_browser_session(page, context, browser, headed=headed)
+    finally:
+        release_automation_lock()
+
     if failed:
         LOGGER.error("Finished with %d failed row(s).", failed)
         return 2
@@ -2092,7 +2991,8 @@ def resolve_credentials(args: argparse.Namespace) -> tuple[str, str]:
 
 
 def main() -> int:
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+    configure_release_logging("automation")
+    LOGGER.info("Automation run started (run_id=%s)", get_run_id())
     args = build_arg_parser().parse_args()
     entries_path = resolve_entries_path(args)
     if not entries_path.is_file():
@@ -2121,9 +3021,5 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    import atexit
-
-    # Works for both package launch (app.run_diary_bot) and direct script launch.
-    atexit.register(_cleanup_playwright_chromium_windows)
     raise SystemExit(main())
 

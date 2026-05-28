@@ -1,6 +1,6 @@
 [Setup]
 AppName=VTU AIDS
-AppVersion=1.0.6
+AppVersion=2.0.0
 AppPublisher=VTU AIDS Contributors
 AppPublisherURL=https://github.com/dhanushscience/VTU-AIDS
 AppSupportURL=https://github.com/dhanushscience/VTU-AIDS/issues

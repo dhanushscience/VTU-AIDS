@@ -10,8 +10,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/dhanushscience/VTU-AIDS/releases/download/v1.0.6/VTU_AIDS_Setup.exe">
-    <img src="https://img.shields.io/badge/Download-VTU_AIDS_Setup.exe%20(v1.0.6)-2563eb?style=for-the-badge&logo=windows&logoColor=white" alt="Download VTU AIDS for Windows" />
+  <a href="https://github.com/dhanushscience/VTU-AIDS/releases/download/v2.0.0/VTU_AIDS_Setup.exe">
+    <img src="https://img.shields.io/badge/Download-VTU_AIDS_Setup.exe%20(v2.0.0)-2563eb?style=for-the-badge&logo=windows&logoColor=white" alt="Download VTU AIDS for Windows" />
   </a>
 </p>
 
@@ -22,7 +22,7 @@
 <p align="center">
   <a href="docs/INSTALL.md">Installation guide</a> ·
   <a href="docs/windows.md">Windows troubleshooting</a> ·
-  <a href="docs/RELEASE_v1.0.6.md">v1.0.6 release notes</a> ·
+  <a href="docs/RELEASE_v2.0.0.md">v2.0.0 release notes</a> ·
   <a href="SECURITY.md">Security</a>
 </p>
 
@@ -54,7 +54,7 @@ You pick dates, write one clear summary of your work, and the app prepares day-w
 
 ## Fastest start (recommended)
 
-1. Download [**VTU_AIDS_Setup.exe (v1.0.6)**](https://github.com/dhanushscience/VTU-AIDS/releases/download/v1.0.6/VTU_AIDS_Setup.exe) (**~483 MB**).
+1. Download [**VTU_AIDS_Setup.exe (v2.0.0)**](https://github.com/dhanushscience/VTU-AIDS/releases/download/v2.0.0/VTU_AIDS_Setup.exe) (**~483 MB**).
 2. Run the installer.
 3. Open **VTU AIDS** from Start menu.
 4. Complete first-run setup wizard.
@@ -65,6 +65,8 @@ Full beginner walkthrough: [docs/INSTALL.md](docs/INSTALL.md)
 ---
 
 ## Screenshots (what each screen means)
+
+All screenshots in docs should use sample/demo values only (no personal credentials, emails, or internship-specific private details).
 
 | Screenshot | What you should understand |
 |---|---|
@@ -87,6 +89,11 @@ When you open the app first time, the setup wizard appears automatically.
    - Paste API key, choose model, set optional default internship label.
    - Click **Finish**.
    - What you should see: main app becomes usable.
+4. **Version update notice (when applicable)**
+   - On app load, VTU AIDS checks latest GitHub release in the background.
+   - If a newer version exists, an update banner appears with:
+     - **Install update** (opens latest release/installer)
+     - **Remind me later** (hides current version reminder and shows again for a newer version)
 
 You can reopen these settings anytime from **Settings**.
 
@@ -137,7 +144,7 @@ Saved here:
 
 - `student_config.json` (portal login + Gemini settings)
 - Generated entries and temporary automation files
-- Logs such as `vtu_aids_error.log`, `bot_run.log`, `vtu_aids_startup.log`
+- Logs such as `vtu_aids_error.log`, `bot_run.log`, `vtu_aids_startup.log`, `vtu_aids_debug.log`
 
 Notes:
 
@@ -151,12 +158,13 @@ Notes:
 
 | Problem you see | Simple fix |
 |---|---|
-| Installer blocked with only `Okay` / `Get apps from the Store` | This is usually Smart App Control. Follow [docs/windows.md](docs/windows.md) and retry install. |
+| Installer blocked with only `Okay` / `Get apps from the Store` | This is usually Smart App Control. Use SAC-safe local install: `powershell -ExecutionPolicy Bypass -File build\\Install-From-Dist.ps1` (details in [docs/windows.md](docs/windows.md)). |
 | Black app window | Use browser fallback (`--browser`). |
-| Setup installed but app did not auto-open | This is expected in v1.0.6. Launch from Start menu manually. |
+| Setup installed but app did not auto-open | This is expected in v2.0.0. Launch from Start menu manually. |
 | Generate or page looks stuck | Press `Ctrl+Shift+R` for hard refresh. |
 | Automation fails and asks for missing browser executable | Run `python vtu_aids.py --install-browser` (source/dev setups). |
 | Force-closed app and automation says already running | Open VTU AIDS again once; stale status is cleaned automatically. |
+| Need to report a bug | Open **Settings** → **Export logs** → **Report bug** and attach the generated zip file. |
 
 ---
 
@@ -186,7 +194,7 @@ Installer can ask whether to remove `%LOCALAPPDATA%\VTU AIDS\` data.
 
 - [docs/INSTALL.md](docs/INSTALL.md) - full beginner installation walkthrough
 - [docs/windows.md](docs/windows.md) - Windows block/fix reference
-- [docs/RELEASE_v1.0.6.md](docs/RELEASE_v1.0.6.md) - release changes
+- [docs/RELEASE_v2.0.0.md](docs/RELEASE_v2.0.0.md) - release changes
 
 ## Security reminder
 

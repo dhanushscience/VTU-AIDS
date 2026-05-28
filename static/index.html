@@ -4,9 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>VTU AIDS</title>
-    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/AIDS_TASKBAR_FAVICON.png" />
     <link rel="icon" href="/favicon.ico" />
-    <link rel="stylesheet" href="/static/styles.css?v=1.0.6" />
+    <link rel="stylesheet" href="/static/styles.css?v=2.0.0" />
   </head>
   <body>
     <div
@@ -48,7 +48,7 @@
           <div class="brand-icon" aria-hidden="true">
             <img
               class="brand-logo"
-              src="/static/logo.png"
+              src="/static/AIDS_MAIN.png"
               width="40"
               height="40"
               alt=""
@@ -79,6 +79,22 @@
           </button>
         </div>
       </header>
+
+      <div id="update-banner" class="update-banner hidden" role="status" aria-live="polite">
+        <div class="update-banner-text" id="update-banner-text"></div>
+        <div class="update-banner-actions">
+          <button type="button" id="update-remind-later" class="btn btn-secondary btn-sm">Remind me later</button>
+          <a
+            id="update-banner-link"
+            class="btn btn-primary btn-sm"
+            href="https://github.com/dhanushscience/VTU-AIDS/releases/latest"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Install update
+          </a>
+        </div>
+      </div>
 
       <main class="content">
         <div class="workspace workspace-3">
@@ -150,12 +166,24 @@
               </div>
 
               <div class="chips-wrap">
+                <p class="preview-label">Selected dates</p>
                 <div class="date-chips" id="date-chips"></div>
               </div>
 
               <p class="field-hint cal-hint" id="cal-hint">
                 Future dates disabled. Select past days, then Generate with AI in Step 2.
               </p>
+              <div class="internship-tracker hidden" id="internship-progress-wrap" aria-live="polite">
+                <div class="internship-dates">
+                  <span id="internship-start-text">Start: -</span>
+                  <span id="internship-end-text">End: -</span>
+                </div>
+                <div class="internship-circle" id="internship-progress-circle" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                  <div class="internship-circle-inner">
+                    <span id="internship-progress-text">0/0</span>
+                  </div>
+                </div>
+              </div>
             </article>
           </section>
 
@@ -194,13 +222,14 @@
                     type="file"
                     id="doc-file-input"
                     class="doc-file-input"
-                    accept=".pdf,.pptx,.doc,.docx,.md,.txt,.png,.jpg,.jpeg,.gif,.webp,.bmp,.py,.js,.ts,.tsx,.jsx,.java,.c,.cpp,.h,.cs,.go,.rs,.rb,.php,.swift,.kt,.sql,.html,.css,.json,.xml,.yaml,.yml,.sh,.ps1,.ipynb,image/*,text/*"
+                    accept=".pdf,.pptx,.docx,.md,.txt,.png,.jpg,.jpeg,.gif,.webp,.bmp,.py,.js,.ts,.tsx,.jsx,.java,.c,.cpp,.h,.cs,.go,.rs,.rb,.php,.swift,.kt,.sql,.html,.css,.json,.xml,.yaml,.yml,.sh,.ps1,.ipynb,image/*,text/*"
                     multiple
                   />
-                  <button type="button" class="btn btn-secondary btn-sm" id="btn-upload-doc" title="PDF, PPTX, Word, images, code, MD, or TXT — max 10 MB">
+                  <button type="button" class="btn btn-secondary btn-sm" id="btn-upload-doc" title="PDF, PPTX, DOCX, images, code, MD, or TXT — max 25 MB">
                     Upload document
                   </button>
                 </div>
+                <p class="field-hint">Max file size: 25 MB</p>
                 <ul id="doc-list" class="doc-list" aria-live="polite"></ul>
               </div>
 
@@ -224,18 +253,18 @@
               <div id="hours-panel-constant" class="hours-panel">
                 <div class="field field-compact">
                   <label for="hours-constant">Hours (same every day)</label>
-                  <input type="number" id="hours-constant" min="0" max="24" step="0.25" value="6" />
+                  <input type="number" id="hours-constant" min="1" max="24" step="0.25" value="6" />
                 </div>
               </div>
               <div id="hours-panel-range" class="hours-panel hidden">
                 <div class="hours-range-row">
                   <div class="field field-compact">
                     <label for="hours-min">Min hours</label>
-                    <input type="number" id="hours-min" min="0" max="24" step="0.25" value="5" />
+                    <input type="number" id="hours-min" min="1" max="24" step="0.25" value="5" />
                   </div>
                   <div class="field field-compact">
                     <label for="hours-max">Max hours</label>
-                    <input type="number" id="hours-max" min="0" max="24" step="0.25" value="8" />
+                    <input type="number" id="hours-max" min="1" max="24" step="0.25" value="8" />
                   </div>
                 </div>
               </div>
@@ -294,7 +323,7 @@
                 <div class="field-row editor-row-compact">
                   <div class="field">
                     <label for="edit-hours">Hours</label>
-                    <input type="number" id="edit-hours" min="0" max="24" step="0.25" />
+                    <input type="number" id="edit-hours" min="1" max="24" step="0.25" />
                   </div>
                   <div class="field">
                     <label for="edit-skills">Skills</label>
@@ -473,12 +502,38 @@
               <label for="cfg-description-words">Default words per description</label>
               <input type="number" id="cfg-description-words" min="20" max="500" step="10" value="80" />
             </div>
+            <div class="field-row">
+              <div class="field">
+                <label for="cfg-internship-start-date">Internship start date</label>
+                <input type="date" id="cfg-internship-start-date" />
+              </div>
+              <div class="field">
+                <label for="cfg-internship-end-date">Probable end date</label>
+                <input type="date" id="cfg-internship-end-date" />
+              </div>
+            </div>
+            <div class="field">
+              <label for="cfg-internship-total-days">Or total internship days</label>
+              <input type="number" id="cfg-internship-total-days" min="0" step="1" />
+            </div>
           </fieldset>
         </div>
         <div class="drawer-foot">
+          <button type="button" class="btn btn-secondary btn-block" id="btn-export-logs">Export logs</button>
+          <button type="button" class="btn btn-secondary btn-block" id="btn-report-bug">Report bug</button>
           <button type="button" class="btn btn-primary btn-block" id="btn-save-settings">Save settings</button>
         </div>
       </aside>
+    </div>
+    <div class="confirm-overlay hidden" id="confirm-modal" aria-hidden="true">
+      <div class="confirm-card" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+        <h3 id="confirm-title">Confirm action</h3>
+        <p id="confirm-message">Are you sure?</p>
+        <div class="confirm-actions">
+          <button type="button" class="btn btn-secondary" id="confirm-cancel">Cancel</button>
+          <button type="button" class="btn btn-danger" id="confirm-ok">Stop automation</button>
+        </div>
+      </div>
     </div>
 
     <script>
@@ -492,6 +547,6 @@
         }
       });
     </script>
-    <script src="/static/app.js?v=1.0.6"></script>
+    <script src="/static/app.js?v=2.0.0"></script>
   </body>
 </html>

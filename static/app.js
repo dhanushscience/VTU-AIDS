@@ -23,9 +23,30 @@ const WEEKDAYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
 const DOW_LABELS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 
 let rangeDebounceTimer = null;
+let isAutomationRunning = false;
+let confirmResolver = null;
+const UPDATE_REMIND_LATER_KEY = "vtu_aids_update_remind_later";
 
 function $(id) {
   return document.getElementById(id);
+}
+
+function refreshConditionalScrollbars() {
+  const selectors = [
+    ".doc-list",
+    ".section-ai .preview-scroll",
+    ".section-ai .entry-editor-ai",
+    ".setup-wizard-card",
+    ".drawer-body",
+    ".section-dates .chips-wrap",
+  ];
+  selectors.forEach((selector) => {
+    const nodes = document.querySelectorAll(selector);
+    nodes.forEach((el) => {
+      el.classList.add("scroll-when-needed");
+      el.classList.toggle("has-overflow", el.scrollHeight > el.clientHeight + 1);
+    });
+  });
 }
 
 function showStatus(msg, type = "ok") {
@@ -41,10 +62,125 @@ function clearStatus() {
   el.textContent = "";
 }
 
+function askConfirm(message, okLabel = "Confirm") {
+  const overlay = $("confirm-modal");
+  const msg = $("confirm-message");
+  const ok = $("confirm-ok");
+  const cancel = $("confirm-cancel");
+  if (!overlay || !msg || !ok || !cancel) return Promise.resolve(false);
+  msg.textContent = message || "Are you sure?";
+  ok.textContent = okLabel;
+  overlay.classList.remove("hidden");
+  overlay.setAttribute("aria-hidden", "false");
+  return new Promise((resolve) => {
+    confirmResolver = resolve;
+  });
+}
+
+function resolveConfirm(value) {
+  const overlay = $("confirm-modal");
+  if (overlay) {
+    overlay.classList.add("hidden");
+    overlay.setAttribute("aria-hidden", "true");
+  }
+  if (confirmResolver) {
+    const done = confirmResolver;
+    confirmResolver = null;
+    done(Boolean(value));
+  }
+}
+
 function setLoading(btn, loading) {
   if (!btn) return;
   btn.disabled = loading;
   btn.classList.toggle("loading", loading);
+}
+
+function hideUpdateBanner() {
+  const banner = $("update-banner");
+  if (!banner) return;
+  banner.classList.add("hidden");
+}
+
+function showUpdateBanner(message, installUrl, latestVersion = "") {
+  const banner = $("update-banner");
+  const text = $("update-banner-text");
+  const link = $("update-banner-link");
+  if (!banner || !text || !link) return;
+  text.textContent = message;
+  if (installUrl) link.href = installUrl;
+  if (latestVersion) banner.dataset.latestVersion = latestVersion;
+  banner.classList.remove("hidden");
+}
+
+async function checkForAppUpdates() {
+  try {
+    const data = await api("/api/update-check", {}, 8000);
+    if (!data?.checked || !data?.update_available) return;
+    const latest = String(data.latest_version || "").trim();
+    const current = String(data.current_version || "").trim();
+    const deferredVersion = localStorage.getItem(UPDATE_REMIND_LATER_KEY) || "";
+    if (deferredVersion && deferredVersion === latest) return;
+    showUpdateBanner(
+      `Update available: v${latest} (current v${current}). To enjoy latest features, it is recommended to update.`,
+      data.installer_url || data.release_url,
+      latest
+    );
+  } catch {
+    /* Update check is non-blocking by design. */
+  }
+}
+
+function clampHoursField(id, { min = 1, max = 24 } = {}) {
+  const el = $(id);
+  if (!el) return;
+  const raw = String(el.value ?? "").trim();
+  if (!raw) return;
+  const n = parseFloat(raw);
+  if (Number.isNaN(n)) return;
+  const clamped = Math.min(max, Math.max(min, n));
+  if (clamped !== n) {
+    el.value = String(clamped);
+  }
+}
+
+function clampAllHoursFields() {
+  ["hours-constant", "hours-min", "hours-max", "edit-hours"].forEach((id) =>
+    clampHoursField(id, { min: 1, max: 24 })
+  );
+}
+
+function clampNumberField(id, { min, max } = {}) {
+  const el = $(id);
+  if (!el) return;
+  const raw = String(el.value ?? "").trim();
+  if (!raw) return;
+  const n = parseFloat(raw);
+  if (Number.isNaN(n)) return;
+  let v = n;
+  if (typeof min === "number") v = Math.max(min, v);
+  if (typeof max === "number") v = Math.min(max, v);
+  if (v !== n) el.value = String(v);
+}
+
+function updateRunButtonUi() {
+  const btn = $("btn-run");
+  if (!btn) return;
+  if (isAutomationRunning) {
+    btn.disabled = false;
+    btn.classList.remove("btn-accent");
+    btn.classList.add("btn-danger");
+    btn.classList.add("automation-running");
+    btn.textContent = "Stop automation";
+    btn.title = "Stop running automation safely";
+    return;
+  }
+  btn.classList.remove("btn-danger");
+  btn.classList.remove("automation-running");
+  btn.classList.add("btn-accent");
+  btn.textContent = "Run automation";
+  btn.disabled = !state.hasGenerated;
+  btn.title = state.hasGenerated ? "Upload entries to VTU Internyet portal" : "Generate with AI first";
 }
 
 let automationFinishReloading = false;
@@ -193,12 +329,19 @@ function applyConfigToForm(cfg) {
   $("hours-max").value = cfg.hours_max ?? 8;
   $("internship").value = cfg.default_internship || "";
   $("description-words").value = state.defaultDescriptionWords;
+  $("cfg-internship-start-date").value = cfg.internship_start_date || "";
+  $("cfg-internship-end-date").value = cfg.internship_end_date || "";
+  $("cfg-internship-total-days").value = cfg.internship_total_days || "";
   $("cfg-password").value = "";
   $("cfg-gemini-key").value = "";
   $("cfg-password").placeholder = cfg.has_password ? "(saved — leave blank to keep)" : "";
   $("cfg-gemini-key").placeholder = cfg.has_gemini_api_key
     ? "(saved — leave blank to keep)"
     : "";
+  clampAllHoursFields();
+  clampNumberField("description-words", { min: 20, max: 500 });
+  clampNumberField("cfg-description-words", { min: 20, max: 500 });
+  updateInternshipProgress();
 }
 
 async function loadConfig() {
@@ -219,10 +362,75 @@ async function saveConfig() {
     hours_constant: parseFloat($("hours-constant").value) || 6,
     hours_min: parseFloat($("hours-min").value) || 5,
     hours_max: parseFloat($("hours-max").value) || 8,
+    internship_start_date: $("cfg-internship-start-date").value || "",
+    internship_end_date: $("cfg-internship-end-date").value || "",
+    internship_total_days: parseInt($("cfg-internship-total-days").value, 10) || 0,
   };
   if (keyInput) body.gemini_api_key = keyInput.replace(/\s+/g, "");
   const cfg = await api("/api/config", { method: "POST", body: JSON.stringify(body) });
   applyConfigToForm(cfg);
+}
+
+async function exportLogsBundle() {
+  const data = await api("/api/diagnostics/export-logs", { method: "POST" });
+  const shown = data.bundle || data.path || "log bundle";
+  showStatus(`Logs exported: ${shown}`, "ok");
+  return data;
+}
+
+async function openBugReportIssue() {
+  const data = await api("/api/diagnostics/report-bug");
+  if (!data.issue_url) throw new Error("Could not generate bug report link.");
+  window.open(data.issue_url, "_blank", "noopener");
+  const runId = data.metadata?.run_id ? ` (Run ID: ${data.metadata.run_id})` : "";
+  showStatus(`Opened bug report page${runId}. Attach the exported logs zip.`, "info");
+}
+
+function getInternshipTargetDays() {
+  const totalDays = parseInt($("cfg-internship-total-days").value, 10) || 0;
+  if (totalDays > 0) return totalDays;
+  const start = $("cfg-internship-start-date").value;
+  const end = $("cfg-internship-end-date").value;
+  if (!start || !end) return 0;
+  const s = new Date(`${start}T00:00:00`);
+  const e = new Date(`${end}T00:00:00`);
+  if (Number.isNaN(s.getTime()) || Number.isNaN(e.getTime()) || e < s) return 0;
+  const dayMs = 24 * 60 * 60 * 1000;
+  return Math.floor((e - s) / dayMs) + 1;
+}
+
+function getCompletedInternshipDays() {
+  const uniq = new Set();
+  // Progress should reflect only days actually entered in VTU portal.
+  for (const e of state.submittedEntries || []) {
+    const d = submittedEntryDate(e);
+    if (d) uniq.add(d);
+  }
+  return uniq.size;
+}
+
+function updateInternshipProgress() {
+  const wrap = $("internship-progress-wrap");
+  const text = $("internship-progress-text");
+  const circle = $("internship-progress-circle");
+  const startText = $("internship-start-text");
+  const endText = $("internship-end-text");
+  if (!wrap || !text || !circle || !startText || !endText) return;
+  const target = getInternshipTargetDays();
+  const done = getCompletedInternshipDays();
+  const start = $("cfg-internship-start-date").value || "";
+  const end = $("cfg-internship-end-date").value || "";
+  startText.textContent = `Start: ${start || "-"}`;
+  endText.textContent = `End: ${end || "-"}`;
+  if (!target) {
+    wrap.classList.add("hidden");
+    return;
+  }
+  wrap.classList.remove("hidden");
+  text.textContent = `${done}/${target}`;
+  const pct = Math.max(0, Math.min(100, (done / target) * 100));
+  circle.style.setProperty("--progress-pct", `${pct.toFixed(2)}%`);
+  circle.setAttribute("aria-valuenow", String(Math.round(pct)));
 }
 
 function renderDateChips(dates) {
@@ -437,7 +645,10 @@ function renderDocumentList() {
   const list = $("doc-list");
   if (!list) return;
   list.innerHTML = "";
-  if (!state.referenceDocuments.length) return;
+  if (!state.referenceDocuments.length) {
+    requestAnimationFrame(refreshConditionalScrollbars);
+    return;
+  }
 
   state.referenceDocuments.forEach((doc) => {
     const li = document.createElement("li");
@@ -459,6 +670,7 @@ function renderDocumentList() {
     });
     list.appendChild(li);
   });
+  requestAnimationFrame(refreshConditionalScrollbars);
 }
 
 function formatApiError(data, status, fallback) {
@@ -579,7 +791,7 @@ function applyDayClasses(btn, isoStr) {
     if (entry.modified) btn.classList.add("entry-modified");
   } else if (submittedEntry) {
     btn.classList.add("has-submitted-entry");
-  } else if (state.hasGenerated) {
+  } else if (state.hasGenerated && state.calMode === "edit") {
     btn.classList.add("no-entry");
   }
 
@@ -690,13 +902,14 @@ function setCalMode(mode) {
 function setPostGenerateEnabled(enabled) {
   state.hasGenerated = enabled;
   $("btn-download").disabled = !enabled;
-  $("btn-run").disabled = !enabled;
+  if (!enabled) isAutomationRunning = false;
+  updateRunButtonUi();
   if (!enabled) setFinishActionVisible(false);
   const modeWrap = $("cal-mode-wrap");
   if (modeWrap) modeWrap.classList.toggle("hidden", !enabled || state.mode === "range");
   if (enabled) {
     $("btn-download").title = "Download Excel workbook";
-    $("btn-run").title = "Upload entries to VTU Internyet portal";
+    updateRunButtonUi();
     setCalMode("pick");
   } else {
     state.calMode = "pick";
@@ -728,10 +941,11 @@ function syncCalendarAfterGenerate() {
   state.selectedDates = new Set();
   state.rangeFrom = "";
   state.rangeTill = "";
-  state.resolvedDates = dates;
-  renderDateChips(dates);
-  if (dates.length) focusCalendarOnDate(dates[0]);
+  state.resolvedDates = [];
+  renderDateChips([]);
+  if (dates.length) focusCalendarOnDate(dates[dates.length - 1]);
   renderCalendar();
+  updateInternshipProgress();
 }
 
 function focusCalendarOnDate(dateStr) {
@@ -908,8 +1122,8 @@ function readEntryFromEditor(dateStr) {
   if (!learningOutcomes) throw new Error("Learnings are required.");
   if (!internship) throw new Error("Set internship label in Step 2 first.");
   const hoursWorked = parseFloat($("edit-hours").value);
-  if (Number.isNaN(hoursWorked) || hoursWorked < 0 || hoursWorked > 24) {
-    throw new Error("Enter valid hours (0–24).");
+  if (Number.isNaN(hoursWorked) || hoursWorked < 1 || hoursWorked > 24) {
+    throw new Error("Enter valid hours (1–24).");
   }
   return {
     date: dateStr,
@@ -1017,7 +1231,11 @@ async function deleteCurrentEntry() {
     showStatus("No saved entry for this day yet.", "error");
     return;
   }
-  if (!window.confirm(`Delete the saved entry for ${dateStr}? You can recreate it in this editor right after.`)) {
+  const okDelete = await askConfirm(
+    `Delete the saved entry for ${dateStr}? You can recreate it in this editor right after.`,
+    "Delete entry"
+  );
+  if (!okDelete) {
     return;
   }
 
@@ -1147,6 +1365,8 @@ function renderPreview(entries) {
     empty.classList.remove("hidden");
     countEl.textContent = "No entries yet";
     refreshSection3View();
+    updateInternshipProgress();
+    requestAnimationFrame(refreshConditionalScrollbars);
     return;
   }
 
@@ -1210,6 +1430,8 @@ function renderPreview(entries) {
   }
 
   refreshSection3View();
+  updateInternshipProgress();
+  requestAnimationFrame(refreshConditionalScrollbars);
 }
 
 function escapeHtml(s) {
@@ -1314,7 +1536,8 @@ async function runBot() {
     "Saving entries and starting automation… A Chromium window will open in front (view only).",
     "info"
   );
-  setLoading($("btn-run"), true);
+  isAutomationRunning = true;
+  updateRunButtonUi();
   try {
     await persistEntries();
     const start = await api(
@@ -1350,7 +1573,25 @@ async function runBot() {
     }
     showStatus(msg, data.ok ? "ok" : "error");
   } finally {
-    setLoading($("btn-run"), false);
+    isAutomationRunning = false;
+    updateRunButtonUi();
+  }
+}
+
+async function stopBot() {
+  const confirmed = await askConfirm(
+    "Stop automation now? Current run will be interrupted and closed safely.",
+    "Stop automation"
+  );
+  if (!confirmed) {
+    return;
+  }
+  try {
+    const data = await api("/api/run-bot/stop", { method: "POST" }, API_TIMEOUT_MS);
+    showStatus(data.message || "Automation stop requested.", "info");
+  } finally {
+    isAutomationRunning = false;
+    updateRunButtonUi();
   }
 }
 
@@ -1361,7 +1602,7 @@ function setMode(mode) {
     t.setAttribute("aria-selected", t.dataset.mode === mode ? "true" : "false");
   });
   $("panel-range").classList.toggle("hidden", mode !== "range");
-  $("panel-calendar").classList.toggle("hidden", mode === "range");
+  $("panel-calendar").classList.remove("hidden");
   const modeWrap = $("cal-mode-wrap");
   if (modeWrap) modeWrap.classList.toggle("hidden", mode === "range" || !state.hasGenerated);
   if (mode === "range") {
@@ -1391,8 +1632,8 @@ function getHoursGeneratePayload() {
   if (state.hoursMode === "range") {
     const hoursMin = parseFloat($("hours-min").value);
     const hoursMax = parseFloat($("hours-max").value);
-    if (Number.isNaN(hoursMin) || Number.isNaN(hoursMax)) {
-      throw new Error("Enter valid min and max work hours.");
+    if (Number.isNaN(hoursMin) || Number.isNaN(hoursMax) || hoursMin < 1 || hoursMax < 1 || hoursMin > 24 || hoursMax > 24) {
+      throw new Error("Enter valid min and max work hours (1–24).");
     }
     if (hoursMin > hoursMax) {
       throw new Error("Min hours cannot be greater than max hours.");
@@ -1405,8 +1646,8 @@ function getHoursGeneratePayload() {
     };
   }
   const hoursConstant = parseFloat($("hours-constant").value);
-  if (Number.isNaN(hoursConstant)) {
-    throw new Error("Enter valid work hours.");
+  if (Number.isNaN(hoursConstant) || hoursConstant < 1 || hoursConstant > 24) {
+    throw new Error("Enter valid work hours (1–24).");
   }
   return {
     hours_mode: "constant",
@@ -1455,6 +1696,7 @@ function openDrawer() {
   overlay.classList.add("open");
   overlay.setAttribute("aria-hidden", "false");
   document.body.style.overflow = "hidden";
+  requestAnimationFrame(refreshConditionalScrollbars);
 }
 
 function closeDrawer() {
@@ -1466,13 +1708,16 @@ function closeDrawer() {
 
 function initSettingsModal() {
   $("btn-quit").addEventListener("click", async () => {
-    if (confirm("Are you sure you want to quit VTU AIDS? This will close the application completely.")) {
-      try {
-        await fetch("/api/shutdown", { method: "POST" });
-      } catch (e) {} // Ignore network error from server shutting down
-      window.close();
-      document.body.innerHTML = "<div style='display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;'><h1>VTU AIDS has been closed. You can safely close this tab.</h1></div>";
-    }
+    const okQuit = await askConfirm(
+      "Are you sure you want to quit VTU AIDS? This will close the application completely.",
+      "Quit app"
+    );
+    if (!okQuit) return;
+    try {
+      await fetch("/api/shutdown", { method: "POST" });
+    } catch (e) {} // Ignore network error from server shutting down
+    window.close();
+    document.body.innerHTML = "<div style='display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;'><h1>VTU AIDS has been closed. You can safely close this tab.</h1></div>";
   });
 
   $("btn-settings").addEventListener("click", () => {
@@ -1487,6 +1732,29 @@ function initSettingsModal() {
       await saveConfig();
       closeDrawer();
       showStatus("Settings saved.", "ok");
+      updateInternshipProgress();
+    } catch (e) {
+      showStatus(e.message, "error");
+    } finally {
+      setLoading(btn, false);
+    }
+  });
+  $("btn-export-logs")?.addEventListener("click", async () => {
+    const btn = $("btn-export-logs");
+    setLoading(btn, true);
+    try {
+      await exportLogsBundle();
+    } catch (e) {
+      showStatus(e.message, "error");
+    } finally {
+      setLoading(btn, false);
+    }
+  });
+  $("btn-report-bug")?.addEventListener("click", async () => {
+    const btn = $("btn-report-bug");
+    setLoading(btn, true);
+    try {
+      await openBugReportIssue();
     } catch (e) {
       showStatus(e.message, "error");
     } finally {
@@ -1498,7 +1766,16 @@ function initSettingsModal() {
   });
   document.addEventListener("keydown", (e) => {
     if (document.body.classList.contains("setup-locked")) return;
+    if (e.key === "Escape" && !$("confirm-modal").classList.contains("hidden")) {
+      resolveConfirm(false);
+      return;
+    }
     if (e.key === "Escape" && $("settings-modal").classList.contains("open")) closeDrawer();
+  });
+  $("confirm-ok")?.addEventListener("click", () => resolveConfirm(true));
+  $("confirm-cancel")?.addEventListener("click", () => resolveConfirm(false));
+  $("confirm-modal")?.addEventListener("click", (e) => {
+    if (e.target === $("confirm-modal")) resolveConfirm(false);
   });
 }
 
@@ -1568,6 +1845,7 @@ function showSetupPanel(step) {
     next.textContent = "Next";
   }
   setSetupError("");
+  requestAnimationFrame(refreshConditionalScrollbars);
 }
 
 function openSetupWizard() {
@@ -1735,15 +2013,34 @@ function bindMainActions() {
   });
 
   $("btn-run").addEventListener("click", async () => {
-    if (!state.hasGenerated) return;
+    if (!state.hasGenerated && !isAutomationRunning) return;
     try {
-      await runBot();
+      if (isAutomationRunning) {
+        await stopBot();
+      } else {
+        await runBot();
+      }
     } catch (e) {
       showStatus(e.message, "error");
     }
   });
 
   $("btn-finish")?.addEventListener("click", finishAutomationAndReload);
+
+  ["cfg-internship-start-date", "cfg-internship-end-date", "cfg-internship-total-days"].forEach((id) => {
+    $(id)?.addEventListener("input", updateInternshipProgress);
+    $(id)?.addEventListener("change", updateInternshipProgress);
+  });
+  ["hours-constant", "hours-min", "hours-max", "edit-hours"].forEach((id) => {
+    $(id)?.addEventListener("input", () => clampHoursField(id));
+    $(id)?.addEventListener("change", () => clampHoursField(id));
+    $(id)?.addEventListener("blur", () => clampHoursField(id));
+  });
+  ["description-words", "cfg-description-words"].forEach((id) => {
+    $(id)?.addEventListener("input", () => clampNumberField(id, { min: 20, max: 500 }));
+    $(id)?.addEventListener("change", () => clampNumberField(id, { min: 20, max: 500 }));
+    $(id)?.addEventListener("blur", () => clampNumberField(id, { min: 20, max: 500 }));
+  });
 
   void loadPersistedEntries();
   void checkDependencies();
@@ -1760,6 +2057,13 @@ function init() {
     initSettingsModal();
     initSetupWizard();
     initCalendarNav();
+    $("update-remind-later")?.addEventListener("click", () => {
+      const latest = String($("update-banner")?.dataset?.latestVersion || "").trim();
+      if (latest) {
+        localStorage.setItem(UPDATE_REMIND_LATER_KEY, latest);
+      }
+      hideUpdateBanner();
+    });
     renderCalendar();
   } catch (err) {
     showInitError(err);
@@ -1774,10 +2078,15 @@ function init() {
   setPostGenerateEnabled(false);
   updateCalHint();
   refreshSection3View();
+  updateInternshipProgress();
+  refreshConditionalScrollbars();
+  window.addEventListener("resize", refreshConditionalScrollbars);
 
   loadConfig()
     .then(() => ensureSetupComplete())
     .catch((e) => showStatus(e.message, "error"));
+
+  void checkForAppUpdates();
 }
 
 async function checkDependencies() {

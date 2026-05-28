@@ -1,6 +1,6 @@
 # Install VTU AIDS (Windows)
 
-This is a practical, beginner-friendly setup guide for release **v1.0.6**.
+This is a practical, beginner-friendly setup guide for release **v2.0.0**.
 
 > Use only if allowed by your institution policy.  
 > VTU AIDS is not affiliated with VTU or Internyet.
@@ -18,7 +18,7 @@ No Python setup is required.
 
 ### 1) Download installer
 
-Download: [VTU_AIDS_Setup.exe](https://github.com/dhanushscience/VTU-AIDS/releases/download/v1.0.6/VTU_AIDS_Setup.exe)  
+Download: [VTU_AIDS_Setup.exe](https://github.com/dhanushscience/VTU-AIDS/releases/download/v2.0.0/VTU_AIDS_Setup.exe)  
 File size: **~483 MB** (large because Chromium is bundled for automation).
 
 What you should see:
@@ -122,6 +122,13 @@ Optional cleanup:
 
 - Delete `%LOCALAPPDATA%\VTU AIDS\` if you want to remove saved settings/logs
 
+### 8) Report a bug (recommended if something fails)
+
+- Open **Settings**
+- Click **Export logs** (this creates a zip file in `%LOCALAPPDATA%\VTU AIDS\`)
+- Click **Report bug** (opens prefilled GitHub issue)
+- Attach the exported zip so issues can be diagnosed faster
+
 ---
 
 ## Option B: Run from source (developers)
@@ -151,9 +158,9 @@ Launch options:
 
 | Issue | Fix |
 |---|---|
-| Installer blocked with no "Run anyway" | Follow Smart App Control steps in [windows.md](windows.md). |
+| Installer blocked with no "Run anyway" | Use SAC-safe local install: `powershell -ExecutionPolicy Bypass -File build\\Install-From-Dist.ps1` (see [windows.md](windows.md)). |
 | App window is black | Run browser fallback: `python vtu_aids.py --browser` |
-| App did not open automatically after install | Normal in v1.0.6. Open from Start menu manually. |
+| App did not open automatically after install | Normal in v2.0.0. Open from Start menu manually. |
 | Need logs for debugging | Check `%LOCALAPPDATA%\VTU AIDS\vtu_aids_error.log` and `bot_run.log`. |
 
 ## Security reminder

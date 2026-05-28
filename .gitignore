@@ -47,3 +47,18 @@ desktop.ini
 playwright-report/
 test-results/
 ms-playwright/
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# Testing and coverage
+.coverage
+htmlcov/
+.tox/
+
+# Temp and database files
+*.sqlite3
+*.swp
+*~

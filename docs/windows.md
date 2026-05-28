@@ -6,7 +6,7 @@ Use this page when Windows blocks install/run, or if app behavior looks confusin
 
 ## Quick check list first
 
-- Confirm you are installing **v1.0.6**
+- Confirm you are installing **v2.0.0**
 - Confirm installer file name is `VTU_AIDS_Setup.exe`
 - Confirm size is around **~483 MB**
 - Prefer running installer from a local folder (for example `C:\Temp`)
@@ -32,6 +32,11 @@ This is commonly **Smart App Control** policy behavior.
 3. Open **Smart App Control settings**
 4. Set to **Off** (restart if prompted)
 5. Run installer again
+
+If you want to keep Smart App Control **ON**, use the proven local install path instead of Program Files installer:
+
+- `powershell -ExecutionPolicy Bypass -File build\Install-From-Dist.ps1`
+- This installs to `%LOCALAPPDATA%\VTU AIDS` and unblocks copied files before launch.
 
 What you should see after fix:
 

@@ -26,6 +26,9 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "hours_constant": 6,
     "hours_min": 5,
     "hours_max": 8,
+    "internship_start_date": "",
+    "internship_end_date": "",
+    "internship_total_days": 0,
 }
 
 _LEGACY_MODELS = frozenset(
@@ -164,6 +167,9 @@ def config_for_api_from(cfg: dict[str, Any]) -> dict[str, Any]:
         "hours_constant": cfg.get("hours_constant", cfg.get("default_hours", 6)),
         "hours_min": cfg.get("hours_min", 5),
         "hours_max": cfg.get("hours_max", 8),
+        "internship_start_date": cfg.get("internship_start_date", ""),
+        "internship_end_date": cfg.get("internship_end_date", ""),
+        "internship_total_days": cfg.get("internship_total_days", 0),
     }
 
 
@@ -179,6 +185,9 @@ def complete_setup(
     gemini_model: str,
     default_internship: str = "",
     default_description_words: int = 80,
+    internship_start_date: str = "",
+    internship_end_date: str = "",
+    internship_total_days: int = 0,
 ) -> dict[str, Any]:
     """Validate and save required credentials after first-run wizard."""
     username = username.strip()
@@ -197,6 +206,9 @@ def complete_setup(
             "gemini_model": gemini_model.strip() or DEFAULT_CONFIG["gemini_model"],
             "default_internship": default_internship.strip(),
             "default_description_words": default_description_words,
+            "internship_start_date": internship_start_date.strip(),
+            "internship_end_date": internship_end_date.strip(),
+            "internship_total_days": max(0, int(internship_total_days or 0)),
             "setup_completed_at": datetime.now(timezone.utc).isoformat(),
         }
     )

@@ -126,7 +126,8 @@ def bot_command(extra_args: list[str]) -> list[str]:
     """Argv to spawn the Playwright bot (same .exe when packaged)."""
     if is_frozen():
         return [str(Path(sys.executable)), "--run-bot", *extra_args]
-    return [bot_python_executable(), str(bot_script_path()), *extra_args]
+    # Run as a module so `app.*` imports work (direct script path breaks automation_lock).
+    return [bot_python_executable(), "-m", "app.run_diary_bot", *extra_args]
 
 
 def ensure_first_run_layout() -> None:

@@ -180,7 +180,7 @@ def _polish_message(raw: str, *, context: str) -> str:
         return _fallback_for_context("automation")
 
     if context == "document":
-        if "could not read" in lower or "unsupported" in lower or "too large" in lower:
+        if msg:
             return msg
         return "Could not read that file. Use a smaller file or a supported format."
 

@@ -34,8 +34,10 @@ os.environ.setdefault(
 
 # Before any HTTPS (Gemini); avoids FileNotFoundError [Errno 2] from bad SSL_CERT_FILE.
 try:
+    from app.diagnostics import configure_release_logging
     from app.paths import ensure_ssl_certificates
 
+    configure_release_logging("launcher")
     ensure_ssl_certificates()
 except Exception:
     pass
@@ -184,7 +186,7 @@ def _run_uvicorn(*, reload: bool) -> None:
         import uvicorn
         from app.main import app
 
-        uvicorn.run(app, host=HOST, port=PORT, log_level="warning", access_log=False)
+        uvicorn.run(app, host=HOST, port=PORT, log_level="debug", access_log=True)
     except Exception:
         log = writable_root() / "vtu_aids_error.log"
         log.write_text(traceback.format_exc(), encoding="utf-8")
@@ -288,7 +290,13 @@ def run_desktop() -> None:
     try:
         from app.paths import bundle_root
 
-        for name in ("app.ico", "logo.png", "favicon.png"):
+        for name in (
+            "app.ico",
+            "AIDS_TASKBAR_FAVICON.png",
+            "favicon.png",
+            "AIDS_MAIN.png",
+            "logo.png",
+        ):
             candidate = bundle_root() / "static" / name
             if candidate.is_file():
                 icon_path = str(candidate)
@@ -297,7 +305,7 @@ def run_desktop() -> None:
         pass
 
     window = webview.create_window(
-        title="VTU AIDS — Automated Internship Diary System",
+        title="",
         url=URL,
         width=1440,
         height=920,
@@ -324,10 +332,11 @@ def run_desktop() -> None:
             _log(f"webview failed gui={gui}: {e}")
             continue
 
-    _log("webview failed, falling back to browser")
-    webbrowser.open(URL)
+    _log("webview failed for all gui options; desktop launch aborted")
     raise SystemExit(
-        f"Desktop window could not start. Opened {URL} in your browser instead."
+        "Desktop window could not start.\n\n"
+        "Use Run VTU AIDS (Browser).bat only as a fallback, or run:\n"
+        "  python vtu_aids.py --browser"
     )
 
 

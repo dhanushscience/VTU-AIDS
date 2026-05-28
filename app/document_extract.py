@@ -5,11 +5,11 @@ from __future__ import annotations
 import io
 from pathlib import Path
 
-MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+MAX_UPLOAD_BYTES = 25 * 1024 * 1024
 MAX_CODE_BYTES = 512 * 1024
 MAX_EXTRACTED_CHARS = 32_000
 
-DOC_EXTENSIONS = frozenset({".pdf", ".pptx", ".docx", ".doc", ".md", ".txt"})
+DOC_EXTENSIONS = frozenset({".pdf", ".pptx", ".docx", ".md", ".txt"})
 
 IMAGE_EXTENSIONS = frozenset({".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"})
 
@@ -74,7 +74,6 @@ EXT_LABELS: dict[str, str] = {
     ".pdf": "PDF",
     ".pptx": "PowerPoint",
     ".docx": "Word",
-    ".doc": "Word",
     ".md": "Markdown",
     ".txt": "Text",
     ".png": "Image",
@@ -111,14 +110,68 @@ def _clip(text: str) -> str:
     return text
 
 
-def _extract_pdf(data: bytes) -> str:
-    from pypdf import PdfReader
+def _extract_pdf(data: bytes, *, api_key: str | None = None) -> str:
+    reader = None
+    try:
+        from pypdf import PdfReader
 
-    reader = PdfReader(io.BytesIO(data))
-    parts: list[str] = []
-    for page in reader.pages:
-        parts.append(page.extract_text() or "")
-    return "\n".join(parts)
+        reader = PdfReader(io.BytesIO(data))
+        parts: list[str] = []
+        for page in reader.pages:
+            try:
+                parts.append(page.extract_text() or "")
+            except Exception:
+                parts.append("")
+        text = "\n".join(parts).strip()
+        if text:
+            return text
+    except ModuleNotFoundError:
+        # Runtime may not have pypdf (e.g. packaged env). Continue with Gemini fallback.
+        pass
+    except Exception:
+        # Corrupt/unsupported PDF for local parser. Continue with Gemini fallback.
+        pass
+
+    # Fallback 1: direct PDF understanding via Gemini.
+    if api_key:
+        try:
+            via_pdf = _extract_pdf_gemini(data, api_key)
+            if via_pdf:
+                return via_pdf
+        except Exception:
+            pass
+
+    # Fallback 2: scanned/image-only PDFs via embedded image OCR.
+    # Requires both API key and a parsed reader with embedded images.
+    if not api_key or reader is None:
+        return ""
+    ocr_parts: list[str] = []
+    for page in reader.pages[:8]:
+        images = getattr(page, "images", None)
+        if not images:
+            continue
+        for img in images[:2]:
+            try:
+                raw = getattr(img, "data", b"") or b""
+                name = str(getattr(img, "name", "") or "").lower()
+                if not raw:
+                    continue
+                if name.endswith(".png"):
+                    mime = "image/png"
+                elif name.endswith(".webp"):
+                    mime = "image/webp"
+                elif name.endswith(".gif"):
+                    mime = "image/gif"
+                elif name.endswith(".bmp"):
+                    mime = "image/bmp"
+                else:
+                    mime = "image/jpeg"
+                ocr = _extract_image_gemini(raw, mime, api_key).strip()
+                if ocr:
+                    ocr_parts.append(ocr)
+            except Exception:
+                continue
+    return "\n\n".join(ocr_parts).strip()
 
 
 def _extract_docx(data: bytes) -> str:
@@ -199,6 +252,39 @@ def _extract_image_gemini(data: bytes, mime: str, api_key: str) -> str:
     raise ValueError("Could not read image with Gemini (no text returned).")
 
 
+def _extract_pdf_gemini(data: bytes, api_key: str) -> str:
+    from google import genai
+    from google.genai import types
+
+    from app.config_store import normalize_api_key, validate_api_key_format
+    from app.gemini_service import (
+        DEFAULT_GEMINI_MODEL,
+        generate_content_with_fallback,
+        models_to_try,
+        normalize_model_name,
+    )
+
+    api_key = normalize_api_key(api_key)
+    validate_api_key_format(api_key)
+    client = genai.Client(api_key=api_key)
+    parts = [
+        types.Part.from_text(
+            text=(
+                "Extract readable text and key technical points from this PDF for internship diary writing. "
+                "Return plain text only."
+            )
+        ),
+        types.Part.from_bytes(data=data, mime_type="application/pdf"),
+    ]
+
+    _, text = generate_content_with_fallback(
+        client,
+        models_to_try(normalize_model_name(DEFAULT_GEMINI_MODEL)),
+        parts,
+    )
+    return text.strip()
+
+
 def _kind_label(ext: str) -> str:
     if ext in IMAGE_EXTENSIONS:
         return EXT_LABELS.get(ext, "Image")
@@ -220,7 +306,7 @@ def extract_text_from_upload(
     ext = Path(filename or "").suffix.lower()
     if ext not in ALLOWED_EXTENSIONS:
         raise ValueError(
-            "Unsupported file type. Use PDF, PPTX, Word, images (PNG/JPG/…), "
+            "Unsupported file type. Use PDF, PPTX, DOCX, images (PNG/JPG/…), "
             "code files (.py, .js, …), Markdown, or TXT."
         )
 
@@ -232,7 +318,7 @@ def extract_text_from_upload(
         mime = IMAGE_MIME.get(ext, "image/jpeg")
         text = _extract_image_gemini(data, mime, api_key)
     elif ext == ".pdf":
-        text = _extract_pdf(data)
+        text = _extract_pdf(data, api_key=api_key)
     elif ext == ".docx":
         text = _extract_docx(data)
     elif ext == ".doc":

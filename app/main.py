@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import json
+import logging
 import sys
+import urllib.error
+import urllib.request
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +18,13 @@ from starlette.responses import Response
 from pydantic import BaseModel, Field
 
 from app.deps import dependency_status, genai_import_error
+from app.diagnostics import (
+    APP_VERSION,
+    build_github_issue_url,
+    configure_release_logging,
+    create_log_bundle,
+    issue_metadata,
+)
 from app.config_store import (
     complete_setup,
     config_for_api,
@@ -41,6 +51,7 @@ from app.gemini_service import (
 )
 from app.bot_runner import get_status as get_bot_status
 from app.bot_runner import start_bot
+from app.bot_runner import stop_bot
 from app.process_cleanup import (
     install_shutdown_handlers,
     reconcile_stale_automation,
@@ -56,11 +67,14 @@ from app.paths import (
 )
 
 ensure_ssl_certificates()
+configure_release_logging("api")
+LOGGER = logging.getLogger(__name__)
 
 PROJECT_ROOT = writable_root()
 STATIC_DIR = static_dir()
+GITHUB_RELEASES_LATEST_API = "https://api.github.com/repos/dhanushscience/VTU-AIDS/releases/latest"
+GITHUB_RELEASES_PAGE = "https://github.com/dhanushscience/VTU-AIDS/releases/latest"
 
-APP_VERSION = "1.0.4"
 _NO_CACHE = {"Cache-Control": "no-store, no-cache, must-revalidate", "Pragma": "no-cache"}
 
 
@@ -128,6 +142,9 @@ class ConfigUpdate(BaseModel):
     hours_constant: float = 6
     hours_min: float = 5
     hours_max: float = 8
+    internship_start_date: str = ""
+    internship_end_date: str = ""
+    internship_total_days: int = 0
 
 
 class DatesResolveRequest(BaseModel):
@@ -214,6 +231,9 @@ class SetupCompleteRequest(BaseModel):
     gemini_model: str = DEFAULT_GEMINI_MODEL
     default_internship: str = ""
     default_description_words: int = 80
+    internship_start_date: str = ""
+    internship_end_date: str = ""
+    internship_total_days: int = 0
 
 @app.post("/api/shutdown")
 def api_shutdown() -> dict[str, str]:
@@ -237,7 +257,9 @@ def index() -> FileResponse:
 @app.get("/favicon.ico", include_in_schema=False)
 def favicon() -> FileResponse:
     for name, media in (
+        ("AIDS_TASKBAR_FAVICON.png", "image/png"),
         ("favicon.png", "image/png"),
+        ("AIDS_MAIN.png", "image/png"),
         ("logo.png", "image/png"),
         ("app.ico", "image/x-icon"),
     ):
@@ -249,9 +271,10 @@ def favicon() -> FileResponse:
 
 @app.get("/logo.png", include_in_schema=False)
 def logo_png() -> FileResponse:
-    logo = STATIC_DIR / "logo.png"
-    if logo.is_file():
-        return FileResponse(logo, media_type="image/png")
+    for name in ("AIDS_MAIN.png", "logo.png"):
+        logo = STATIC_DIR / name
+        if logo.is_file():
+            return FileResponse(logo, media_type="image/png")
     raise HTTPException(status_code=404)
 
 
@@ -260,6 +283,98 @@ def api_status() -> dict[str, Any]:
     deps = dependency_status()
     err = genai_import_error()
     return {"ok": deps["ready"], "dependencies": deps, "message": err}
+
+
+@app.get("/api/version")
+def api_version() -> dict[str, Any]:
+    return {"version": APP_VERSION}
+
+
+def _normalize_version(version: str) -> tuple[int, ...]:
+    raw = (version or "").strip().lower()
+    if raw.startswith("v"):
+        raw = raw[1:]
+    core = raw.split("-", 1)[0]
+    out: list[int] = []
+    for chunk in core.split("."):
+        digits = "".join(ch for ch in chunk if ch.isdigit())
+        out.append(int(digits) if digits else 0)
+    while out and out[-1] == 0:
+        out.pop()
+    return tuple(out or [0])
+
+
+def _is_newer_version(latest: str, current: str) -> bool:
+    l_parts = list(_normalize_version(latest))
+    c_parts = list(_normalize_version(current))
+    size = max(len(l_parts), len(c_parts))
+    l_parts.extend([0] * (size - len(l_parts)))
+    c_parts.extend([0] * (size - len(c_parts)))
+    return tuple(l_parts) > tuple(c_parts)
+
+
+@app.get("/api/update-check")
+def api_update_check() -> dict[str, Any]:
+    request = urllib.request.Request(
+        GITHUB_RELEASES_LATEST_API,
+        headers={
+            "Accept": "application/vnd.github+json",
+            "User-Agent": f"VTU-AIDS/{APP_VERSION}",
+        },
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=6) as response:
+            payload = json.loads(response.read().decode("utf-8", errors="replace"))
+    except (urllib.error.URLError, TimeoutError, ValueError) as exc:
+        LOGGER.warning("Update check failed: %s", exc)
+        return {
+            "checked": False,
+            "current_version": APP_VERSION,
+            "latest_version": APP_VERSION,
+            "update_available": False,
+            "release_url": GITHUB_RELEASES_PAGE,
+            "installer_url": GITHUB_RELEASES_PAGE,
+            "error": "Unable to check updates right now.",
+        }
+
+    latest_tag = str(payload.get("tag_name") or "").strip() or APP_VERSION
+    latest_version = latest_tag[1:] if latest_tag.lower().startswith("v") else latest_tag
+    release_url = str(payload.get("html_url") or GITHUB_RELEASES_PAGE)
+    installer_url = release_url
+    for asset in payload.get("assets", []):
+        name = str(asset.get("name") or "")
+        if name.lower() == "vtu_aids_setup.exe":
+            installer_url = str(asset.get("browser_download_url") or installer_url)
+            break
+    return {
+        "checked": True,
+        "current_version": APP_VERSION,
+        "latest_version": latest_version,
+        "update_available": _is_newer_version(latest_version, APP_VERSION),
+        "release_url": release_url,
+        "installer_url": installer_url,
+    }
+
+
+@app.get("/api/diagnostics/report-bug")
+def api_report_bug() -> dict[str, Any]:
+    meta = issue_metadata()
+    return {
+        "ok": True,
+        "issue_url": build_github_issue_url(title=f"Bug report: VTU AIDS {APP_VERSION}"),
+        "metadata": meta,
+    }
+
+
+@app.post("/api/diagnostics/export-logs")
+def api_export_logs() -> dict[str, Any]:
+    try:
+        bundle = create_log_bundle()
+        rel = str(bundle.relative_to(writable_root()))
+        LOGGER.info("Diagnostics bundle exported: %s", bundle)
+        return {"ok": True, "bundle": rel, "path": str(bundle)}
+    except Exception as e:
+        raise_http(500, e, context="api", log=True)
 
 
 @app.get("/api/config")
@@ -282,6 +397,9 @@ def api_setup_complete(body: SetupCompleteRequest) -> dict[str, Any]:
             gemini_model=body.gemini_model,
             default_internship=body.default_internship,
             default_description_words=body.default_description_words,
+            internship_start_date=body.internship_start_date,
+            internship_end_date=body.internship_end_date,
+            internship_total_days=body.internship_total_days,
         )
         return {
             "ok": True,
@@ -304,6 +422,14 @@ def list_gemini_models() -> dict[str, Any]:
 
 @app.post("/api/config")
 def post_config(body: ConfigUpdate) -> dict[str, Any]:
+    if not (20 <= int(body.default_description_words) <= 500):
+        raise HTTPException(status_code=400, detail="default_description_words must be between 20 and 500.")
+    if not (1 <= float(body.hours_constant) <= 24):
+        raise HTTPException(status_code=400, detail="hours_constant must be between 1 and 24.")
+    if not (1 <= float(body.hours_min) <= 24) or not (1 <= float(body.hours_max) <= 24):
+        raise HTTPException(status_code=400, detail="hours_min and hours_max must be between 1 and 24.")
+    if float(body.hours_min) > float(body.hours_max):
+        raise HTTPException(status_code=400, detail="Min hours cannot be greater than max hours.")
     data: dict[str, Any] = {
         "username": body.username.strip(),
         "gemini_model": body.gemini_model.strip() or DEFAULT_GEMINI_MODEL,
@@ -314,6 +440,9 @@ def post_config(body: ConfigUpdate) -> dict[str, Any]:
         "hours_constant": body.hours_constant,
         "hours_min": body.hours_min,
         "hours_max": body.hours_max,
+        "internship_start_date": body.internship_start_date.strip(),
+        "internship_end_date": body.internship_end_date.strip(),
+        "internship_total_days": max(0, int(body.internship_total_days or 0)),
     }
     if body.password and body.password != "***":
         data["password"] = body.password
@@ -347,7 +476,7 @@ async def api_extract_document(file: UploadFile = File(...)) -> dict[str, Any]:
         data = await file.read()
         api_key: str | None = None
         ext = Path(file.filename).suffix.lower()
-        if ext in IMAGE_EXTENSIONS:
+        if ext in IMAGE_EXTENSIONS or ext == ".pdf":
             cfg = config_with_secrets()
             api_key = resolve_gemini_api_key(cfg)
         result = extract_text_from_upload(file.filename, data, api_key=api_key)
@@ -374,6 +503,10 @@ def api_generate(body: GenerateRequest) -> dict[str, Any]:
     hours_max = body.hours_max if body.hours_max is not None else cfg.get("hours_max", 8)
     if hours_mode == "range" and float(hours_min) > float(hours_max):
         raise HTTPException(status_code=400, detail="Min hours cannot be greater than max hours.")
+    if not (1 <= float(hours_constant) <= 24):
+        raise HTTPException(status_code=400, detail="hours_constant must be between 1 and 24.")
+    if not (1 <= float(hours_min) <= 24) or not (1 <= float(hours_max) <= 24):
+        raise HTTPException(status_code=400, detail="hours_min and hours_max must be between 1 and 24.")
 
     words = body.description_words if body.description_words is not None else cfg.get(
         "default_description_words", 80
@@ -437,6 +570,10 @@ def api_generate_day(body: GenerateDayRequest) -> dict[str, Any]:
     hours_max = body.hours_max if body.hours_max is not None else cfg.get("hours_max", 8)
     if hours_mode == "range" and float(hours_min) > float(hours_max):
         raise HTTPException(status_code=400, detail="Min hours cannot be greater than max hours.")
+    if not (1 <= float(hours_constant) <= 24):
+        raise HTTPException(status_code=400, detail="hours_constant must be between 1 and 24.")
+    if not (1 <= float(hours_min) <= 24) or not (1 <= float(hours_max) <= 24):
+        raise HTTPException(status_code=400, detail="hours_min and hours_max must be between 1 and 24.")
     words = body.description_words if body.description_words is not None else cfg.get(
         "default_description_words", 80
     )
@@ -557,3 +694,9 @@ def api_run_bot(body: RunBotRequest) -> dict[str, Any]:
     if not result.get("started"):
         raise HTTPException(status_code=409, detail=result.get("detail", "Could not start automation."))
     return result
+
+
+@app.post("/api/run-bot/stop")
+def api_stop_bot() -> dict[str, Any]:
+    _require_setup_complete()
+    return stop_bot()
