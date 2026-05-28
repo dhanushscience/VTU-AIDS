@@ -17,7 +17,8 @@ function App() {
 
     document.documentElement.classList.toggle('is-mobile', isMobile);
 
-    const flipDelay = prefersReducedMotion ? 0 : isMobile ? 2200 : 3000;
+    // Chaos intro runs ~4s (popup at 1s, fail animations through 4s) — flip only after it finishes.
+    const flipDelay = prefersReducedMotion ? 0 : 4500;
     const flipTimer = setTimeout(() => {
       setFlipped(true);
     }, flipDelay);

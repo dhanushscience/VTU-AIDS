@@ -155,9 +155,13 @@ body {
 }
 
 @keyframes popupAppear {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -60%) scale(0.96);
+  }
   to {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: translate(-50%, -50%) scale(1);
   }
 }
 
@@ -1143,6 +1147,45 @@ footer {
   opacity: 0.45;
 }
 
+/* Mobile chaos: smaller motion so effects stay on-screen in narrow viewports */
+@keyframes portalFailLeftMobile {
+  0% { transform: translate(0, 0) rotate(0deg) skew(0deg); opacity: 1; }
+  25% { transform: translate(-8px, 12px) rotate(-8deg) skew(-4deg, 2deg); opacity: 0.95; }
+  50% { transform: translate(-14px, 28px) rotate(-16deg) skew(-8deg, 4deg) scale(0.98); opacity: 0.75; }
+  75% { transform: translate(-20px, 48px) rotate(-24deg) skew(-12deg, 6deg) scale(0.94); opacity: 0.4; }
+  100% { transform: translate(-26px, 64px) rotate(-32deg) skew(-16deg, 8deg) scale(0.9); opacity: 0; }
+}
+
+@keyframes portalFailRightMobile {
+  0% { transform: translate(0, 0) rotate(0deg) skew(0deg); opacity: 1; }
+  25% { transform: translate(6px, 14px) rotate(6deg) skew(4deg, -2deg); opacity: 0.96; }
+  50% { transform: translate(12px, 32px) rotate(12deg) skew(8deg, -4deg) scale(1.01); opacity: 0.8; }
+  75% { transform: translate(18px, 52px) rotate(20deg) skew(12deg, -6deg) scale(0.96); opacity: 0.45; }
+  100% { transform: translate(24px, 72px) rotate(28deg) skew(16deg, -8deg) scale(0.92); opacity: 0; }
+}
+
+@keyframes bodyShakeMobile {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  15% { transform: translate(-3px, 2px) rotate(-0.4deg); }
+  35% { transform: translate(4px, -3px) rotate(0.5deg); }
+  55% { transform: translate(-4px, 4px) rotate(-0.6deg); }
+  75% { transform: translate(3px, -2px) rotate(0.4deg); }
+}
+
+@keyframes topbarChaosMobile {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  20% { transform: translateY(-3px) rotate(-2deg); }
+  45% { transform: translateY(2px) rotate(3deg); }
+  70% { transform: translateY(-4px) rotate(-4deg); }
+}
+
+@keyframes chaosRattleMobile {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); opacity: 1; }
+  25% { transform: translate(2px, -2px) rotate(1deg); }
+  50% { transform: translate(-3px, 2px) rotate(-1.5deg); opacity: 0.92; }
+  75% { transform: translate(2px, -3px) rotate(1.2deg); }
+}
+
 /* =========================================
    MOBILE & TABLET RESPONSIVE
    ========================================= */
@@ -1169,10 +1212,13 @@ footer {
   }
 
   .face.front {
-    overflow-y: auto;
-    overflow-x: hidden;
+    overflow: visible;
     -webkit-overflow-scrolling: touch;
     justify-content: flex-start;
+  }
+
+  .face.front .portal-skeleton {
+    overflow: visible;
   }
 
   .app-container {
@@ -1241,13 +1287,61 @@ footer {
     font-size: 0.92rem;
   }
 
+  .panic-popup {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    z-index: 100;
+    max-height: min(42vh, 280px);
+    overflow-y: auto;
+  }
+
   .portal-sidebar {
-    display: none;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    min-height: unset;
+    padding: 0.65rem;
+    animation: portalFailLeftMobile 4s cubic-bezier(0.36, 0.07, 0.19, 0.97) forwards;
+    animation-delay: 0.2s;
+  }
+
+  .portal-sidebar .sidebar-title {
+    width: 100%;
+    margin-bottom: 0.25rem;
+  }
+
+  .portal-sidebar .sidebar-item {
+    flex: 1 1 calc(50% - 0.35rem);
+    min-width: 0;
+    padding: 0.5rem;
+    grid-template-columns: 28px 1fr;
+  }
+
+  .portal-main {
+    animation: portalFailRightMobile 4s cubic-bezier(0.36, 0.07, 0.19, 0.97) forwards;
+    animation-delay: 0.2s;
   }
 
   .portal-body {
     grid-template-columns: 1fr;
     gap: 0.75rem;
+    animation: bodyShakeMobile 4s ease-in-out 0.25s both;
+  }
+
+  .portal-topbar {
+    animation: portalGlow 4s linear forwards, topbarChaosMobile 4s ease-in-out 0.3s both;
+  }
+
+  .manual-status {
+    animation: portalBlink 0.2s ease-in-out infinite alternate;
+  }
+
+  .portal-card,
+  .field-block,
+  .text-block .text-line {
+    animation: rightPop 0.7s ease-out both, chaosRattleMobile 4s ease-in-out 0.4s both;
   }
 
   .portal-card {
@@ -1391,20 +1485,7 @@ footer {
     transition-duration: 0.01ms !important;
   }
 
-  .face.front,
-  .portal-skeleton,
-  .portal-sidebar,
-  .portal-main,
-  .portal-topbar,
-  .manual-status,
-  .panic-popup,
-  .sidebar-item,
-  .field-block,
-  .text-block .text-line,
-  .portal-card {
-    animation: none !important;
-  }
-
+  /* Keep back-face mockup animations off; intro chaos still runs on mobile unless user opts out. */
   .step-panel,
   .anim-date,
   .anim-text,
