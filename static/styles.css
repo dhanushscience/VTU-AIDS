@@ -1660,10 +1660,6 @@ body.setup-locked .app {
   color: var(--text-secondary);
 }
 
-.setup-install-hint {
-  margin-top: 0.5rem;
-}
-
 .setup-panel .field {
   margin-bottom: 0.65rem;
 }

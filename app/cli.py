@@ -296,21 +296,19 @@ def run_desktop() -> None:
     except Exception:
         pass
 
-    window_kwargs: dict[str, object] = {
-        "title": "VTU AIDS — Automated Internship Diary System",
-        "url": URL,
-        "width": 1440,
-        "height": 920,
-        "min_size": (1024, 680),
-        "text_select": True,
-        "background_color": "#f4f4f5",
-    }
-    if icon_path:
-        import inspect
+    window = webview.create_window(
+        title="VTU AIDS — Automated Internship Diary System",
+        url=URL,
+        width=1440,
+        height=920,
+        min_size=(1024, 680),
+        text_select=True,
+        background_color="#f4f4f5",
+    )
 
-        if "icon" in inspect.signature(webview.create_window).parameters:
-            window_kwargs["icon"] = icon_path
-    window = webview.create_window(**window_kwargs)
+    start_kwargs: dict[str, object] = {"debug": False}
+    if icon_path:
+        start_kwargs["icon"] = icon_path
 
     # Do NOT force edgechromium first — it often shows a black window without error.
     for gui in (None, "edgechromium"):
@@ -318,9 +316,9 @@ def run_desktop() -> None:
             label = gui or "default"
             _log(f"webview.start gui={label}")
             if gui:
-                webview.start(gui=gui, debug=False)
+                webview.start(gui=gui, **start_kwargs)
             else:
-                webview.start(debug=False)
+                webview.start(**start_kwargs)
             return
         except Exception as e:
             _log(f"webview failed gui={gui}: {e}")
