@@ -7,7 +7,7 @@
 
 | File | Size (approx.) | Notes |
 |------|----------------|-------|
-| [VTU_AIDS_Setup.exe](https://github.com/dhanushscience/VTU-AIDS/releases/download/v1.0.4/VTU_AIDS_Setup.exe) | ~277 MB | Recommended — includes Chromium for automation |
+| [VTU_AIDS_Setup.exe](https://github.com/dhanushscience/VTU-AIDS/releases/download/v1.0.4/VTU_AIDS_Setup.exe) | ~483 MB | Recommended — includes Chromium for automation |
 
 If **Smart App Control** blocks the installer, see [docs/windows.md](windows.md) or `SMART_APP_CONTROL.txt` in the install folder.
 
@@ -103,7 +103,7 @@ Automated Internship Diary System for [VTU Internyet](https://vtu.internyet.in).
 - **SAC install helpers** — scripts for Smart App Control / local dev installs
 
 ### Download
-- **VTU_AIDS_Setup.exe** (~277 MB, Windows 10/11, includes Chromium)
+- **VTU_AIDS_Setup.exe** (~483 MB, Windows 10/11, includes Chromium)
 
 ### Quick start
 1. Install and open **VTU AIDS**

@@ -12,7 +12,9 @@ OutputBaseFilename=VTU_AIDS_Setup
 Compression=lzma2
 SolidCompression=yes
 ArchitecturesInstallIn64BitMode=x64
-PrivilegesRequired=lowest
+; Install per-machine by default so enterprise/AppControl path rules are more likely to allow launch.
+PrivilegesRequired=admin
+PrivilegesRequiredOverridesAllowed=dialog
 SetupIconFile=..\static\app.ico
 UninstallDisplayIcon={app}\VTU AIDS.ico
 DisableProgramGroupPage=yes
@@ -33,7 +35,8 @@ Name: "{autodesktop}\VTU AIDS"; Filename: "{app}\VTU AIDS.exe"; IconFilename: "{
 
 [Run]
 Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""Get-ChildItem -LiteralPath '{app}' -Recurse -File | Unblock-File -ErrorAction SilentlyContinue"""; StatusMsg: "Preparing application files..."; Flags: runhidden waituntilterminated
-Filename: "{app}\VTU AIDS.exe"; Description: "{cm:LaunchProgram,VTU AIDS}"; Flags: nowait postinstall skipifsilent
+; Do not auto-launch after install. On restricted PCs this can fail with
+; "Application Control policy has blocked this file" and looks like setup failed.
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}"

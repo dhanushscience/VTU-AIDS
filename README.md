@@ -20,7 +20,7 @@
 </p>
 
 <p align="center">
-  <sub>Windows 10/11 · ~277 MB · includes Chromium for automation</sub>
+  <sub>Windows 10/11 · ~483 MB · includes Chromium for automation</sub>
 </p>
 
 <p align="center">
@@ -65,7 +65,7 @@
 - **Edit before upload** — tweak any day in Step 3
 - **Playwright automation** — logs into Internyet and submits entries (optional visible browser)
 - **Excel export** — download `entries.xlsx` anytime
-- **Windows installer** — standalone `.exe` with bundled Chromium (~280 MB)
+- **Windows installer** — standalone `.exe` with bundled Chromium (~483 MB)
 
 ---
 
