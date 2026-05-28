@@ -144,6 +144,10 @@ body {
   animation: popupAppearLayer 0.45s ease-out 1s forwards, popupShakeLayer 4s ease-in-out 1s both;
 }
 
+html.is-mobile .panic-popup-layer .panic-popup {
+  animation: popupAppearLayer 0.55s ease-out 1.4s forwards, popupShakeLayer 7.5s ease-in-out 1.4s both;
+}
+
 .panic-popup {
   position: absolute;
   top: 50%;
@@ -1236,13 +1240,17 @@ html.is-mobile .flipper.is-flipped .face.back {
 }
 
 /* Full-screen red panic flash (works on iOS; not tied to 3D face) */
+html.is-mobile.intro-active {
+  --chaos-duration: 7.5s;
+}
+
 html.is-mobile.intro-active::before {
   content: '';
   position: fixed;
   inset: 0;
   z-index: 150;
   pointer-events: none;
-  animation: pagePanic 0.35s ease-in-out 1s 12 alternate forwards;
+  animation: pagePanic 0.5s ease-in-out 1.2s 16 alternate forwards;
 }
 
 html.is-mobile.intro-active .face.front {
@@ -1250,41 +1258,48 @@ html.is-mobile.intro-active .face.front {
 }
 
 html.is-mobile.intro-active .portal-skeleton {
-  animation: quake 4s ease-in-out 0.2s 1 both !important;
+  animation: quake var(--chaos-duration) ease-in-out 0.25s 1 both !important;
 }
 
 html.is-mobile.intro-active .manual-status {
-  animation: portalBlink 0.18s ease-in-out infinite alternate !important;
+  animation: portalBlink 0.28s ease-in-out infinite alternate !important;
 }
 
 html.is-mobile.intro-active .manual-progress__fill {
-  animation: manualFill 4s linear forwards !important;
+  animation: manualFill var(--chaos-duration) linear 0.25s forwards !important;
 }
 
 html.is-mobile.intro-active .portal-topbar {
-  animation: portalGlow 4s linear forwards, topbarChaosMobile 4s ease-in-out 0.3s both !important;
+  animation: portalGlow var(--chaos-duration) linear forwards,
+    topbarChaosMobile var(--chaos-duration) ease-in-out 0.35s both !important;
 }
 
 html.is-mobile.intro-active .portal-sidebar {
-  animation: chaosStrobe 4s ease-in-out 0.2s both !important;
+  animation: chaosStrobe var(--chaos-duration) ease-in-out 0.3s both !important;
 }
 
 html.is-mobile.intro-active .portal-main {
-  animation: chaosStrobe 4s ease-in-out 0.35s both !important;
+  animation: chaosStrobe var(--chaos-duration) ease-in-out 0.5s both !important;
 }
 
 html.is-mobile.intro-active .portal-body {
-  animation: bodyShakeMobile 4s ease-in-out 0.25s both !important;
+  animation: bodyShakeMobile var(--chaos-duration) ease-in-out 0.3s both !important;
 }
 
 html.is-mobile.intro-active .portal-card,
 html.is-mobile.intro-active .field-block,
 html.is-mobile.intro-active .text-block .text-line {
-  animation: rightPop 0.7s ease-out both, chaosRattleMobile 4s ease-in-out 0.45s both !important;
+  animation: rightPop 0.9s ease-out both,
+    chaosRattleMobile var(--chaos-duration) ease-in-out 0.55s both !important;
 }
 
 html.is-mobile.intro-active .sidebar-item {
-  animation: sidebarJitter 0.85s ease-in-out infinite !important;
+  animation: sidebarJitter 1.1s ease-in-out infinite !important;
+}
+
+html.is-mobile.intro-active .panic-popup-layer .panic-popup {
+  animation: popupAppearLayer 0.55s ease-out 1.4s forwards,
+    popupShakeLayer var(--chaos-duration) ease-in-out 1.4s both !important;
 }
 
 @keyframes chaosStrobe {

@@ -21,8 +21,8 @@ function App() {
       root.classList.add('intro-active');
     }
 
-    // Chaos intro ~4s; extra buffer on mobile for slower GPUs / Safari.
-    const flipDelay = prefersReducedMotion ? 800 : isMobile ? 5200 : 4500;
+    // Mobile intro chaos runs ~7.5s; desktop ~4s.
+    const flipDelay = prefersReducedMotion ? 800 : isMobile ? 9000 : 4500;
     const flipTimer = setTimeout(() => {
       setFlipped(true);
       root.classList.remove('intro-active');
