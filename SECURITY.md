@@ -6,8 +6,8 @@ These files are **gitignored** and must stay local:
 
 | File | Contains |
 |------|----------|
-| `student_config.json` | Portal username, password, Gemini API key |
-| `.env` | Optional `GEMINI_API_KEY` |
+| `student_config.json` | Portal username. (Passwords and API keys are securely stored in the Windows Credential Manager and no longer exist in this file in plain text) |
+| `.env` | Optional `GEMINI_API_KEY` (Not recommended, use UI instead) |
 | `generated/entries.json` | Your diary content |
 
 Use `student_config.example.json` as a template only.
@@ -17,6 +17,7 @@ Use `student_config.example.json` as a template only.
 | Data | Location |
 |------|----------|
 | Settings | `%LOCALAPPDATA%\VTU AIDS\student_config.json` |
+| Passwords & API Keys | Securely stored in the Windows Credential Manager |
 | Generated entries | `%LOCALAPPDATA%\VTU AIDS\generated\` |
 | Logs | `%LOCALAPPDATA%\VTU AIDS\vtu_aids_*.log`, `bot_run.log`, `bot_status.json` |
 

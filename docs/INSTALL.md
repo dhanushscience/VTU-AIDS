@@ -1,6 +1,6 @@
 # Install VTU AIDS (Windows)
 
-This is a practical, beginner-friendly setup guide for release **v2.0.0**.
+This is a practical, beginner-friendly setup guide for release **v2.1.0**.
 
 > Use only if allowed by your institution policy.  
 > VTU AIDS is not affiliated with VTU or Internyet.
@@ -18,13 +18,13 @@ No Python setup is required.
 
 ### 1) Download installer
 
-Download: [VTU_AIDS_Setup.exe](https://github.com/dhanushscience/VTU-AIDS/releases/download/v2.0.0/VTU_AIDS_Setup.exe)  
-File size: **~483 MB** (large because Chromium is bundled for automation).
+Download: [VTU_AIDS_Setup.exe](https://github.com/dhanushscience/VTU-AIDS/releases/download/v2.1.0/VTU_AIDS_Setup.exe)  
+File size: **~485 MB** (large because Chromium is bundled for automation).
 
 What you should see:
 
 - Browser download item named `VTU_AIDS_Setup.exe`
-- Size around 483 MB
+- Size around 485 MB
 
 ### 2) Run installer
 
@@ -160,14 +160,14 @@ Launch options:
 |---|---|
 | Installer blocked with no "Run anyway" | Use SAC-safe local install: `powershell -ExecutionPolicy Bypass -File build\\Install-From-Dist.ps1` (see [windows.md](windows.md)). |
 | App window is black | Run browser fallback: `python vtu_aids.py --browser` |
-| App did not open automatically after install | Normal in v2.0.0. Open from Start menu manually. |
+| App did not open automatically after install | Normal in v2.1.0. Open from Start menu manually. |
 | Need logs for debugging | Check `%LOCALAPPDATA%\VTU AIDS\vtu_aids_error.log` and `bot_run.log`. |
 
 ## Security reminder
 
 Do not share or commit:
 
-- `student_config.json`
+- `student_config.json` (note: passwords and API keys are now securely stored in Windows Credential Manager)
 - `.env`
 - `generated/entries.json`
 
