@@ -206,7 +206,7 @@ function finishAutomationAndReload() {
 }
 
 const API_TIMEOUT_MS = 20000;
-const API_GENERATE_TIMEOUT_MS = 180000; // Gemini can take 1–3 minutes
+const API_GENERATE_TIMEOUT_MS = 600000; // Gemini can take several minutes
 const API_BOT_TIMEOUT_MS = 1800000; // Playwright: one entry ≈ 1–3 min; many dates need longer
 
 async function api(path, options = {}, timeoutMs = API_TIMEOUT_MS) {

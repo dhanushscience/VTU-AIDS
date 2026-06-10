@@ -89,10 +89,59 @@ def load_config(path: Path | None = None) -> dict[str, Any]:
         out["gemini_model"] = normalize_model_name(str(out["gemini_model"]))
     if out.get("gemini_api_key"):
         out["gemini_api_key"] = normalize_api_key(str(out["gemini_api_key"]))
+
+    import keyring
+    import logging
+
+    try:
+        kr_password = keyring.get_password("vtu-aids", "password")
+        if kr_password is not None:
+            out["password"] = kr_password
+        kr_gemini_key = keyring.get_password("vtu-aids", "gemini_api_key")
+        if kr_gemini_key is not None:
+            out["gemini_api_key"] = kr_gemini_key
+    except Exception as e:
+        logging.getLogger(__name__).warning("Keyring read failed: %s", e)
+
+    needs_migration = False
+    if data.get("password"):
+        try:
+            keyring.set_password("vtu-aids", "password", str(data["password"]))
+            out["password"] = str(data["password"])
+            needs_migration = True
+        except Exception as e:
+            logging.getLogger(__name__).warning("Keyring write failed for password: %s", e)
+    if data.get("gemini_api_key"):
+        try:
+            clean_key = normalize_api_key(str(data["gemini_api_key"]))
+            keyring.set_password("vtu-aids", "gemini_api_key", clean_key)
+            out["gemini_api_key"] = clean_key
+            needs_migration = True
+        except Exception as e:
+            logging.getLogger(__name__).warning("Keyring write failed for gemini_api_key: %s", e)
+
     for key in _OPTIONAL_CONFIG_KEYS:
         if key in data:
             out[key] = data[key]
+
+    if needs_migration:
+        try:
+            _save_config_json(out, p)
+        except Exception:
+            pass
+
     return out
+
+
+def _save_config_json(current: dict[str, Any], p: Path) -> None:
+    data_to_save = dict(current)
+    data_to_save.pop("password", None)
+    data_to_save.pop("gemini_api_key", None)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    tmp = p.with_suffix(".tmp")
+    with tmp.open("w", encoding="utf-8") as f:
+        json.dump(data_to_save, f, indent=2, ensure_ascii=False)
+    tmp.replace(p)
 
 
 def missing_setup_fields(cfg: dict[str, Any]) -> list[str]:
@@ -138,11 +187,22 @@ def save_config(data: dict[str, Any], path: Path | None = None) -> dict[str, Any
     for key in _OPTIONAL_CONFIG_KEYS:
         if key in data:
             current[key] = data[key]
-    p.parent.mkdir(parents=True, exist_ok=True)
-    tmp = p.with_suffix(".tmp")
-    with tmp.open("w", encoding="utf-8") as f:
-        json.dump(current, f, indent=2, ensure_ascii=False)
-    tmp.replace(p)
+
+    import keyring
+    import logging
+
+    if "password" in data:
+        try:
+            keyring.set_password("vtu-aids", "password", str(data["password"]))
+        except Exception as e:
+            logging.getLogger(__name__).warning("Keyring write failed for password: %s", e)
+    if "gemini_api_key" in data:
+        try:
+            keyring.set_password("vtu-aids", "gemini_api_key", normalize_api_key(str(data["gemini_api_key"])))
+        except Exception as e:
+            logging.getLogger(__name__).warning("Keyring write failed for gemini_api_key: %s", e)
+
+    _save_config_json(current, p)
     return current
 
 

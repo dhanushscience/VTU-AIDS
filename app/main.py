@@ -10,9 +10,10 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile, Path as FPath
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 from pydantic import BaseModel, Field
@@ -77,6 +78,29 @@ GITHUB_RELEASES_PAGE = "https://github.com/dhanushscience/VTU-AIDS/releases/late
 
 _NO_CACHE = {"Cache-Control": "no-store, no-cache, must-revalidate", "Pragma": "no-cache"}
 
+import time
+import threading
+
+_RATE_LIMITS: dict[str, float] = {}
+_RL_LOCK = threading.Lock()
+
+def check_rate_limit(key: str, min_interval: float) -> None:
+    with _RL_LOCK:
+        now = time.time()
+        last = _RATE_LIMITS.get(key, 0.0)
+        if now - last < min_interval:
+            raise HTTPException(status_code=429, detail="Too many requests. Please wait and try again.")
+        _RATE_LIMITS[key] = now
+
+class CSRFMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next) -> Response:
+        if request.method in ("POST", "PUT", "DELETE", "PATCH") and request.url.path.startswith("/api/"):
+            origin = request.headers.get("origin") or request.headers.get("referer") or ""
+            if origin:
+                if not ("127.0.0.1" in origin or "localhost" in origin):
+                    return JSONResponse(status_code=403, content={"detail": "Cross-Origin Request Blocked for Security"})
+        return await call_next(request)
+
 
 def _require_setup_complete() -> None:
     if is_setup_required():
@@ -97,6 +121,14 @@ class _NoCacheUiMiddleware(BaseHTTPMiddleware):
 
 
 app = FastAPI(title="VTU AIDS", description="Automated Internship Diary System")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origin_regex=r"^http://(127\.0\.0\.1|localhost)(:\d+)?$",
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+app.add_middleware(CSRFMiddleware)
 app.add_middleware(_NoCacheUiMiddleware)
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
@@ -488,6 +520,7 @@ async def api_extract_document(file: UploadFile = File(...)) -> dict[str, Any]:
 @app.post("/api/generate")
 def api_generate(body: GenerateRequest) -> dict[str, Any]:
     _require_setup_complete()
+    check_rate_limit("generate", 2.0)
     cfg = config_with_secrets()
     internship = body.internship.strip() or str(cfg.get("default_internship", "")).strip()
     hours = body.default_hours if body.default_hours is not None else cfg.get("default_hours", 6)
@@ -556,6 +589,7 @@ def api_generate(body: GenerateRequest) -> dict[str, Any]:
 def api_generate_day(body: GenerateDayRequest) -> dict[str, Any]:
     """Generate AI content for a single calendar day."""
     _require_setup_complete()
+    check_rate_limit("generate", 1.0)
     cfg = config_with_secrets()
     internship = body.internship.strip() or str(cfg.get("default_internship", "")).strip()
     hours_mode = (body.hours_mode or cfg.get("hours_mode", "constant")).strip().lower()
@@ -642,7 +676,7 @@ def api_save_entries(body: SaveEntriesRequest) -> dict[str, Any]:
 
 
 @app.delete("/api/entries/day/{date}")
-def api_delete_entry_day(date: str) -> dict[str, Any]:
+def api_delete_entry_day(date: str = FPath(..., pattern=r"^\d{4}-\d{2}-\d{2}$")) -> dict[str, Any]:
     try:
         remaining = delete_entry_by_date(date)
         _write_all_entries(remaining)
@@ -673,6 +707,7 @@ def api_run_bot_status() -> dict[str, Any]:
 @app.post("/api/run-bot")
 def api_run_bot(body: RunBotRequest) -> dict[str, Any]:
     _require_setup_complete()
+    check_rate_limit("run_bot", 5.0)
     entries = load_entries()
     if not entries:
         raise HTTPException(status_code=400, detail="Generate entries with AI first.")

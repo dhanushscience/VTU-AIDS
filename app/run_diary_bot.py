@@ -239,10 +239,10 @@ def load_entries(path: Path, sheet: str = "Entries") -> list[dict[str, Any]]:
 
 
 def load_config_credentials(config_path: Path) -> tuple[str, str]:
-    with config_path.open(encoding="utf-8") as f:
-        data = json.load(f)
-    username = str(data.get("username", "")).strip()
-    password = str(data.get("password", "")).strip()
+    from app.config_store import config_with_secrets
+    cfg = config_with_secrets(config_path)
+    username = str(cfg.get("username", "")).strip()
+    password = str(cfg.get("password", "")).strip()
     if not username or not password:
         raise ValueError(f"Config {config_path} must include non-empty username and password.")
     return username, password
