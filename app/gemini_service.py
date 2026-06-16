@@ -271,7 +271,7 @@ def generate_content_with_fallback(
                 raise ValueError(
                     "Your Gemini API key was rejected by Google (invalid or revoked). "
                     "Create a new key at https://aistudio.google.com/apikey — open Settings, "
-                    "paste the full key (starts with AIza), and click Save. "
+                    "paste the full key (AIza… or AQ.…), and click Save. "
                     "You can also set GEMINI_API_KEY in the environment."
                 ) from e
             if _is_switch_model_error(code, msg):

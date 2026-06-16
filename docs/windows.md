@@ -6,7 +6,7 @@ Use this page when Windows blocks install/run, or if app behavior looks confusin
 
 ## Quick check list first
 
-- Confirm you are installing **v2.0.0**
+- Confirm you are installing **v2.1.1**
 - Confirm installer file name is `VTU_AIDS_Setup.exe`
 - Confirm size is around **~483 MB**
 - Prefer running installer from a local folder (for example `C:\Temp`)

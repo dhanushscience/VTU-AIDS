@@ -123,8 +123,8 @@ def _polish_message(raw: str, *, context: str) -> str:
     if "api key" in lower and ("missing" in lower or "open settings" in lower):
         return "Add your Gemini API key in Settings (or finish the setup wizard)."
 
-    if "api key format" in lower or "starts with aiza" in lower:
-        return "Gemini API key format looks wrong. Paste the full key from Google AI Studio."
+    if "api key format" in lower or "starts with aiza" in lower or "starts with aq" in lower:
+        return "Gemini API key format looks wrong. Paste the full key from Google AI Studio (AIza… or AQ.…)."
 
     if (
         "invalid api key" in lower

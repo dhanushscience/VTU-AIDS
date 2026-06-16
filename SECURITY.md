@@ -24,7 +24,7 @@ Use `student_config.example.json` as a template only.
 ## API keys
 
 - Get a Gemini key from [Google AI Studio](https://aistudio.google.com/apikey).
-- Keys start with `AIza`. They are masked in the UI after saving.
+- Keys start with `AIza` (legacy) or `AQ.` (new auth keys from AI Studio). They are masked in the UI after saving.
 - If a key was ever committed to git, **revoke it** in AI Studio and create a new one.
 
 ## Reporting issues

@@ -44,13 +44,15 @@ _LEGACY_MODELS = frozenset(
     }
 )
 
-_GEMINI_KEY_RE = re.compile(r"^AIza[0-9A-Za-z_-]{30,}$")
+_LEGACY_GEMINI_KEY_RE = re.compile(r"^AIza[0-9A-Za-z_-]{30,}$")
+# Google AI Studio auth keys (service-account-bound), e.g. AQ.Ab8RN6L9...
+_AUTH_GEMINI_KEY_RE = re.compile(r"^AQ\.[0-9A-Za-z_-]{20,}$")
 
 
-def normalize_api_key(raw: str) -> str:
-    """Strip whitespace/quotes; Google keys must not contain spaces."""
-    k = str(raw or "").strip().strip('"').strip("'")
-    return "".join(k.split())
+def is_valid_api_key_format(key: str) -> bool:
+    if not key or key == "***":
+        return False
+    return bool(_LEGACY_GEMINI_KEY_RE.match(key) or _AUTH_GEMINI_KEY_RE.match(key))
 
 
 def validate_api_key_format(key: str) -> None:
@@ -59,12 +61,18 @@ def validate_api_key_format(key: str) -> None:
             "Gemini API key is missing. Open Settings and paste a key from "
             "https://aistudio.google.com/apikey then click Save."
         )
-    if not _GEMINI_KEY_RE.match(key):
+    if not is_valid_api_key_format(key):
         raise ValueError(
             "API key format looks wrong. Create a new key at "
-            "https://aistudio.google.com/apikey — it should start with AIza and "
-            "have no spaces. Paste the full key, then Save."
+            "https://aistudio.google.com/apikey — it should start with AIza or AQ. "
+            "(new auth keys) and have no spaces. Paste the full key, then Save."
         )
+
+
+def normalize_api_key(raw: str) -> str:
+    """Strip whitespace/quotes; Google keys must not contain spaces."""
+    k = str(raw or "").strip().strip('"').strip("'")
+    return "".join(k.split())
 
 
 def resolve_gemini_api_key(cfg: dict[str, Any]) -> str:

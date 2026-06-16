@@ -17,7 +17,7 @@ try:
 except ModuleNotFoundError:
     from paths import writable_root
 
-APP_VERSION = "2.0.0"
+APP_VERSION = "2.1.1"
 _RUN_ID_ENV = "VTU_AIDS_RUN_ID"
 _CONFIGURED = False
 

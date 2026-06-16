@@ -10,8 +10,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/dhanushscience/VTU-AIDS/releases/download/v2.1.0/VTU_AIDS_Setup.exe">
-    <img src="https://img.shields.io/badge/Download-VTU_AIDS_Setup.exe%20(v2.1.0)-2563eb?style=for-the-badge&logo=windows&logoColor=white" alt="Download VTU AIDS for Windows" />
+  <a href="https://github.com/dhanushscience/VTU-AIDS/releases/download/v2.1.1/VTU_AIDS_Setup.exe">
+    <img src="https://img.shields.io/badge/Download-VTU_AIDS_Setup.exe%20(v2.1.1)-2563eb?style=for-the-badge&logo=windows&logoColor=white" alt="Download VTU AIDS for Windows" />
   </a>
 </p>
 
@@ -24,7 +24,7 @@
   <sub>(enable <a href="https://github.com/dhanushscience/VTU-AIDS/settings/pages">GitHub Pages</a>: branch <code>gh-pages</code>, folder <code>/</code>)</sub> ·
   <a href="docs/INSTALL.md">Installation guide</a> ·
   <a href="docs/windows.md">Windows troubleshooting</a> ·
-  <a href="docs/RELEASE_v2.1.0.md">v2.1.0 release notes</a> ·
+  <a href="docs/RELEASE_v2.1.1.md">v2.1.1 release notes</a> ·
   <a href="SECURITY.md">Security</a>
 </p>
 
@@ -56,7 +56,7 @@ You pick dates, write one clear summary of your work, and the app prepares day-w
 
 ## Fastest start (recommended)
 
-1. Download [**VTU_AIDS_Setup.exe (v2.1.0)**](https://github.com/dhanushscience/VTU-AIDS/releases/download/v2.1.0/VTU_AIDS_Setup.exe) (**~485 MB**).
+1. Download [**VTU_AIDS_Setup.exe (v2.1.1)**](https://github.com/dhanushscience/VTU-AIDS/releases/download/v2.1.1/VTU_AIDS_Setup.exe) (**~485 MB**).
 2. Run the installer.
 3. Open **VTU AIDS** from Start menu.
 4. Complete first-run setup wizard.
@@ -197,7 +197,7 @@ Installer can ask whether to remove `%LOCALAPPDATA%\VTU AIDS\` data.
 
 - [docs/INSTALL.md](docs/INSTALL.md) - full beginner installation walkthrough
 - [docs/windows.md](docs/windows.md) - Windows block/fix reference
-- [docs/RELEASE_v2.1.0.md](docs/RELEASE_v2.1.0.md) - release changes
+- [docs/RELEASE_v2.1.1.md](docs/RELEASE_v2.1.1.md) - release changes
 
 ## Security reminder
 

@@ -6,7 +6,7 @@
     <title>VTU AIDS</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/static/AIDS_TASKBAR_FAVICON.png" />
     <link rel="icon" href="/favicon.ico" />
-    <link rel="stylesheet" href="/static/styles.css?v=2.0.0" />
+    <link rel="stylesheet" href="/static/styles.css?v=2.1.1" />
   </head>
   <body>
     <div
@@ -425,11 +425,11 @@
           <p class="setup-lead">
             Create a free API key at
             <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio</a>
-            (starts with <code>AIza</code>).
+            (starts with <code>AIza</code> or <code>AQ.</code>).
           </p>
           <div class="field">
             <label for="setup-gemini-key">API key</label>
-            <input type="password" id="setup-gemini-key" placeholder="AIza…" autocomplete="off" />
+            <input type="password" id="setup-gemini-key" placeholder="AIza… or AQ.…" autocomplete="off" />
           </div>
           <div class="field">
             <label for="setup-gemini-model">Model</label>
@@ -479,7 +479,7 @@
             <legend>Gemini AI</legend>
             <div class="field">
               <label for="cfg-gemini-key">API key</label>
-              <input type="password" id="cfg-gemini-key" placeholder="Starts with AIza" autocomplete="off" />
+              <input type="password" id="cfg-gemini-key" placeholder="AIza… or AQ.…" autocomplete="off" />
               <p class="field-hint">
                 <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Get key from AI Studio</a>
               </p>
@@ -547,6 +547,6 @@
         }
       });
     </script>
-    <script src="/static/app.js?v=2.0.0"></script>
+    <script src="/static/app.js?v=2.1.1"></script>
   </body>
 </html>
